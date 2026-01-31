@@ -49,10 +49,11 @@ public:
      */
     const Ext4Superblock& superblock() const;
 
+    QByteArray readBytes(quint64 offset, quint64 size);
+
 private:
     QFile m_file;
     Ext4Superblock m_sb{};
     bool m_valid = false;
     quint32 m_blockSize = 4096;
-	QByteArray readBytes(quint64 offset, quint64 size);
 };

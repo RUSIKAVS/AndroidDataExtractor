@@ -130,6 +130,7 @@ private slots:
     // Дополнительные слоты
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
 
+
     // Слоты для кнопок
     void onGenerateReport();
     void onQuickExtract();
@@ -138,6 +139,7 @@ private slots:
     void onToggleDarkMode();
     void onCheckUpdates();
     void onDocumentation();
+    void onExportMedia0Clicked();
 
     // Простые слоты
     void onAbout();

@@ -6,6 +6,7 @@
 #include "core/AndroidPartition.hpp"
 #include "AndroidCrypto.hpp"
 //#include "FileSystemExplorer.hpp"
+#include "core/ext4/Ext4Exporter.hpp"
 
 // Qt Core
 #include <QFileDialog>
@@ -127,6 +128,12 @@ void MainWindow::initConnections()
 
     connect(ui->treeWidget, &QTreeWidget::itemClicked,
             this, &MainWindow::onTreeItemClicked);
+
+    connect(ui->btnExportMedia0,
+            &QPushButton::clicked,
+            this,
+            &MainWindow::onExportMedia0Clicked);
+
 }
 
 void MainWindow::restoreSettings()
@@ -1842,5 +1849,52 @@ QString MainWindow::formatFileSize(qint64 bytes)
         return QString("%1 MB").arg(bytes / (1024.0 * 1024), 0, 'f', 2);
     } else {
         return QString("%1 GB").arg(bytes / (1024.0 * 1024 * 1024), 0, 'f', 2);
+    }
+}
+
+
+void MainWindow::onExportMedia0Clicked()
+{
+    AndroidPartition* part = getSelectedPartition();
+
+    if (!part) {
+        QMessageBox::warning(this, "Ошибка", "Раздел не выбран!");
+        return;
+    }
+
+    if (!part->isDecrypted) {
+        QMessageBox::warning(this, "Ошибка",
+                             "Раздел userdata ещё не расшифрован!");
+        return;
+    }
+
+    QString outDir = QFileDialog::getExistingDirectory(
+        this,
+        "Выберите папку для экспорта");
+
+    if (outDir.isEmpty())
+        return;
+
+    updateStatus("Экспорт /data/media/0 ...");
+
+    Ext4Exporter exporter;
+
+    bool ok = exporter.exportPath(
+        part->decryptedPath,
+        "/data/media/0",
+        outDir,
+        [this](int percent, const QString& msg)
+        {
+            ui->progressBar->setValue(percent);
+            ui->statusLabel->setText(msg);
+            QApplication::processEvents();
+        });
+
+    if (ok) {
+        QMessageBox::information(this, "Готово",
+                                 "Экспорт успешно завершён!");
+    } else {
+        QMessageBox::critical(this, "Ошибка",
+                              "Не удалось экспортировать раздел.");
     }
 }
