@@ -1,2 +1,0 @@
-# AndroidDataExtractor
-AndroidDataExtractor
