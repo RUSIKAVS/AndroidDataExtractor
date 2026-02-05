@@ -2,117 +2,110 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QString>
-#include "partitionanalyzer.h"
-#include "hexviewer.h"
-#include "filemanager.h"
+#include <QTreeWidgetItem>
+#include <QTableWidgetItem>
+#include <QLabel>
+#include <QProgressBar>
+#include <QPlainTextEdit>
+#include <memory>
 
-// Форвард декларация классов Qt
+// Предварительное объявление классов
+class PartitionAnalyzer;
+class SuperAnalyzer;
+class GuidManager;
+class FileManager;
+
 QT_BEGIN_NAMESPACE
-class QPushButton;
-class QLabel;
-class QListWidget;
-class QTextEdit;
-class QVBoxLayout;
-class QHBoxLayout;
-class QSplitter;
-class QFileDialog;
-class QProgressBar;
+namespace Ui {
+class MainWindow;
+}
 QT_END_NAMESPACE
 
-/**
- * @class MainWindow
- * @brief Главное окно приложения Android Extractor
- *
- * Основной интерфейс пользователя, объединяющий все компоненты приложения.
- */
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    /**
-     * @brief Конструктор главного окна
-     * @param parent Родительский виджет
-     */
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
     /**
-     * @brief Деструктор главного окна
+     * @brief Добавить сообщение в лог
+     * @param message Сообщение для логирования
+     * @param type Тип сообщения (info, warning, error)
      */
-    ~MainWindow();
+    void logMessage(const QString &message, const QString &type = "info");
 
 private slots:
-    /**
-     * @brief Открывает диалог выбора папки
-     */
-    void openFolderDialog();
+    // Слоты для меню
+    void on_actionOpenImage_triggered();
+    void on_actionOpenFolder_triggered();
+    void on_actionExtractPartition_triggered();
+    void on_actionAnalyzeSuper_triggered();
+    void on_actionDarkTheme_triggered();
+    void on_actionLightTheme_triggered();
+    void on_actionExit_triggered();
+    void on_actionAbout_triggered();
 
-    /**
-     * @brief Анализирует выбранный файл
-     */
-    void analyzeSelectedFile();
+    // Слоты для виджетов
+    void on_treeWidget_itemDoubleClicked(QTreeWidgetItem *item, int column);
+    void on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+    void on_treeWidget_customContextMenuRequested(const QPoint &pos);
+    void on_guidTableWidget_itemDoubleClicked(QTableWidgetItem *item);
 
-    /**
-     * @brief Обрабатывает выбор раздела
-     * @param index Индекс выбранного раздела
-     */
-    void onPartitionSelected(int index);
+    // Слоты для логов
+    void on_clearLogsButton_clicked();
 
-    /**
-     * @brief Отображает сообщение лога
-     * @param message Сообщение для отображения
-     */
-    void displayLogMessage(const QString &message);
-
-    /**
-     * @brief Отображает сообщение об ошибке
-     * @param errorMessage Сообщение об ошибке
-     */
-    void displayErrorMessage(const QString &errorMessage);
+    // Слот для прогресса файловых операций
+    void onFileProgressChanged(int current, int total, const QString &message);
 
 private:
-    /**
-     * @brief Настраивает пользовательский интерфейс
-     */
-    void setupUi();
+    // Инициализация
+    void initUI();
+    void setupTreeWidget();
+    void setupGuidTable();
+    void setupHexViewer();
+    void setupLogsViewer();
+    void setupStatusBar();
+    void setupMenuAndToolbar();
+    void connectSignalsSlots();
 
-    /**
-     * @brief Настраивает соединения сигналов и слотов
-     */
-    void setupConnections();
+    // Темы
+    void applyDarkTheme();
+    void applyLightTheme();
 
-    /**
-     * @brief Сканирует папку на наличие файлов образов
-     * @param folderPath Путь к папке
-     */
-    void scanFolderForImageFiles(const QString &folderPath);
+    // Вспомогательные методы
+    void updateStatusBar(const QString &message, int timeout = 3000);
+    void showProgress(bool show, int maximum = 100);
+    void updateProgress(int value);
 
-    /**
-     * @brief Обновляет список файлов образов
-     * @param fileList Список файлов
-     */
-    void updateImageFileList(const QStringList &fileList);
+    // Работа с разделами
+    void addPartitionToTree(const QString &name, const QString &guid,
+                            quint64 size, const QString &type,
+                            const QString &path, quint64 offset = 0);
+    QString formatSize(quint64 bytes) const;
+    void analyzeImageFile(const QString &filePath);
+    void analyzeFolder(const QString &folderPath);
+    void scanFolderForImages(const QString &folderPath);
+    void checkAndAddSuperPartition(const QString &filePath);
+    void autoSuperPartitionAnalysis();
+    void showPartitionInfo(const QVariantMap &partData);
+    QString getGuidUsage(const QString &guid) const;
 
-    // Виджеты интерфейса
-    QPushButton *m_btnOpenFolder;
-    QPushButton *m_btnAnalyze;
-    QLabel *m_lblFolderPath;
-    QLabel *m_lblSelectedFile;
-    QListWidget *m_listImageFiles;
-    QListWidget *m_listPartitions;
-    HexViewer *m_hexViewer;
-    FileManager *m_fileManager;
-    QTextEdit *m_logOutput;
-    QProgressBar *m_progressBar;
+    // Члены класса
+    Ui::MainWindow *ui;
+    std::unique_ptr<PartitionAnalyzer> m_partitionAnalyzer;
+    std::unique_ptr<SuperAnalyzer> m_superAnalyzer;
+    std::unique_ptr<GuidManager> m_guidManager;
+    std::unique_ptr<FileManager> m_fileManager;
 
-    // Рабочие переменные
-    QString m_currentFolder;
-    QString m_selectedImageFile;
-    DiskInfo m_currentDiskInfo;
+    QLabel *m_statusLabel = nullptr;
+    QProgressBar *m_progressBar = nullptr;
 
-    // Модули
-    PartitionAnalyzer *m_partitionAnalyzer;
+    QString m_currentImagePath;
+    QString m_currentFolderPath;
+    QMap<QString, QVariantMap> m_partitionMap;
+    void on_saveLogsButton_clicked();
 };
 
 #endif // MAINWINDOW_H

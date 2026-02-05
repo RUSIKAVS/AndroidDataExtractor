@@ -1,26 +1,19 @@
 #include "mainwindow.h"
-#include <QApplication>
 
-/**
- * @brief Точка входа в приложение
- * @param argc Количество аргументов командной строки
- * @param argv Массив аргументов командной строки
- * @return Код возврата приложения
- */
+#include <QApplication>
+#include <QStyleFactory>
+
 int main(int argc, char *argv[])
 {
-    // Создаем приложение Qt
-    QApplication app(argc, argv);
+    QApplication a(argc, argv);
 
-    // Устанавливаем информацию о приложении
-    app.setApplicationName("Android Extractor");
-    app.setApplicationVersion("1.0.0");
-    app.setOrganizationName("AndroidExtractor");
+    // Настройка приложения
+    a.setApplicationName("Android Data Extractor");
+    a.setApplicationVersion("1.0.0");
+    a.setOrganizationName("AndroidExtractor");
 
-    // Создаем и показываем главное окно
-    MainWindow mainWindow;
-    mainWindow.show();
+    MainWindow w;
+    w.show();
 
-    // Запускаем главный цикл приложения
-    return app.exec();
+    return a.exec();
 }

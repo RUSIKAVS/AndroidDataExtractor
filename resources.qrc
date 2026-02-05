@@ -1,0 +1,34 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+<qresource prefix="/icons">
+    <!-- Основные иконки -->
+    <file alias="open.png">icons/open.png</file>
+    <file alias="folder.png">icons/folder.png</file>
+    <file alias="extract.png">icons/extract.png</file>
+    <file alias="analyze.png">icons/analyze.png</file>
+    <file alias="exit.png">icons/exit.png</file>
+    <file alias="dark.png">icons/dark.png</file>
+    <file alias="light.png">icons/light.png</file>
+    <file alias="about.png">icons/about.png</file>
+    <file alias="qt.png">icons/qt.png</file>
+    
+    <!-- Дополнительные иконки -->
+    <file alias="refresh.png">icons/refresh.png</file>
+    <file alias="copy.png">icons/copy.png</file>
+    <file alias="clear.png">icons/clear.png</file>
+    <file alias="save.png">icons/save.png</file>
+    <file alias="export.png">icons/export.png</file>
+    <file alias="scan.png">icons/scan.png</file>
+    <file alias="verify.png">icons/verify.png</file>
+    <file alias="go-to.png">icons/go-to.png</file>
+    
+    <!-- Иконки для разделов -->
+    <file alias="drive-harddisk.png">icons/drive-harddisk.png</file>
+    <file alias="partition.png">icons/partition.png</file>
+    <file alias="super.png">icons/super.png</file>
+    <file alias="boot.png">icons/boot.png</file>
+    <file alias="system.png">icons/system.png</file>
+    <file alias="vendor.png">icons/vendor.png</file>
+    <file alias="data.png">icons/data.png</file>
+</qresource>
+</RCC>

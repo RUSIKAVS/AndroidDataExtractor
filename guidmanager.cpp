@@ -1,211 +1,214 @@
 #include "guidmanager.h"
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QDebug>
+#include <QMap>
+#include <QString>
+#include <QByteArray>
 
 GuidManager::GuidManager(QObject *parent)
-    : QObject{parent}
+    : QObject(parent)
 {
-    // Инициализируем карту GUID при создании объекта
-    m_guidMap = initializeGuidMap();
+    initGuidDatabase();
 }
 
-QMap<QUuid, QString> GuidManager::initializeGuidMap()
+void GuidManager::initGuidDatabase()
 {
-    QMap<QUuid, QString> map;
+    // Расширенная база данных GUID для Android и стандартных разделов
+    m_guidMap = {
+        // Стандартные GUID разделов
+        {"C12A7328-F81F-11D2-BA4B-00A0C93EC93B", {"EFI System", "Системный раздел EFI"}},
+        {"024DEE41-33E7-11D3-9D69-0008C781F39F", {"MBR", "Главная загрузочная запись"}},
+        {"E3C9E316-0B5C-4DB8-817D-F92DF00215AE", {"Microsoft Reserved", "Зарезервировано Microsoft"}},
+        {"EBD0A0A2-B9E5-4433-87C0-68B6B72699C7", {"Microsoft Basic Data", "Основные данные Windows"}},
 
-    // ============================================
-    // 1. СТАНДАРТНЫЕ И ОБЩИЕ GUID (UEFI/BIOS/ПК)
-    // ============================================
+        // Android специфичные GUID
+        {"19A710A2-B3CA-11E4-B026-10604B889DCF", {"Android Bootloader", "Загрузчик Android"}},
+        {"193D1EA4-B3CA-11E4-B075-10604B889DCF", {"Android Boot", "Раздел boot Android"}},
+        {"0DE68BC2-3C0F-4D71-BF27-A2C13461FCD0", {"Android Recovery", "Раздел recovery"}},
+        {"A19EA859-4D6F-7442-8235-686F6C746572", {"Android System", "Системный раздел Android"}},
+        {"C5A0AEEC-13EA-11E5-A1B1-001E67CA0C3C", {"Android Vendor", "Vendor раздел"}},
+        {"BD59408B-4514-490D-BF12-9878D963A378", {"Android Userdata", "Пользовательские данные"}},
+        {"EBBEADAF-22C9-E33B-8F5D-0E81686A68CB", {"Android Cache", "Кэш раздел"}},
+        {"DC76DDA9-5AC1-491C-AF42-A82591580C0D", {"Android Metadata", "Метаданные Android"}},
 
-    // Загрузочные разделы
-    map[QUuid("024DEE41-33E7-11D3-9D69-0008C781F39F")] = "MBR Partition Scheme";
-    map[QUuid("21686148-6449-6E6F-744E-656564454649")] = "BIOS Boot";
-    map[QUuid("C12A7328-F81F-11D2-BA4B-00A0C93EC93B")] = "EFI System Partition (ESP)";
+        // Динамические разделы (Super)
+        {"E6A98E58-E8E4-4C6E-B078-8B3A7A7B5B9E", {"Android Dynamic", "Динамический раздел Android"}},
+        {"2C86E742-745E-4FDD-BFD1-B930C9A6F4C1", {"Android Logical", "Логический раздел Android"}},
 
-    // Системные разделы
-    map[QUuid("E3C9E316-0B5C-4DB8-817D-F92DF00215AE")] = "Microsoft Reserved (MSR)";
-    map[QUuid("EBD0A0A2-B9E5-4433-87C0-68B6B72699C7")] = "Microsoft Basic Data";
-    map[QUuid("DE94BBA4-06D1-4D40-A16A-BFD50179D6AC")] = "Microsoft Recovery";
+        // Файловые системы
+        {"0FC63DAF-8483-4772-8E79-3D69D8477DE4", {"Linux Filesystem", "Файловая система Linux"}},
+        {"0657FD6D-A4AB-43C4-84E5-0933C84B4F4F", {"Linux Swap", "Раздел подкачки Linux"}},
+        {"E6D6D379-F507-44C2-A23C-238F2A3DF928", {"Linux LVM", "Менеджер логических томов"}},
 
-    // Производители
-    map[QUuid("D3BFE2DE-3DAF-11DF-BA40-E3A556D89593")] = "Intel Fast Flash (iFFS)";
-    map[QUuid("F4019732-066E-4E12-8273-346C5641494F")] = "Sony Boot";
+        // GPT служебные
+        {"8DA63339-0007-60C0-C436-083AC8230908", {"GPT Reserved", "Зарезервировано GPT"}},
+        {"00000000-0000-0000-0000-000000000000", {"Empty", "Пустой раздел"}}
+    };
 
-    // ============================================
-    // 2. LINUX GUID (Стандартные)
-    // ============================================
-
-    // Основные разделы Linux
-    map[QUuid("0FC63DAF-8483-473E-817E-0F72E55EA8C5")] = "Linux Filesystem";
-    map[QUuid("44479540-F297-41B2-9AF7-D131D5F0458A")] = "Linux Root (x86-64)";
-    map[QUuid("4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709")] = "Linux Root (x86)";
-    map[QUuid("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F")] = "Linux Swap";
-
-    // Иерархия Linux
-    map[QUuid("69DAD710-2CE4-4E3C-B16C-21A1D49ABED3")] = "Linux /boot";
-    map[QUuid("BC13C2FF-59E6-4262-A352-B275FD6F7172")] = "Linux /boot/efi";
-    map[QUuid("933AC7E1-2EB4-4F13-B844-0E14E2AEF915")] = "Linux /home";
-    map[QUuid("5808C8AA-7E8F-42E0-85D2-E1E90434CFB3")] = "Linux /usr";
-    map[QUuid("3B8F8425-20E0-4F3B-907F-1A25A76F98E8")] = "Linux /srv";
-
-    // Специальные Linux
-    map[QUuid("A19D880F-05FC-4D3B-A006-743F0F84911E")] = "Linux RAID";
-    map[QUuid("E6D6D379-F507-44C2-A23C-238F2A3DF928")] = "Linux LVM";
-    map[QUuid("8DA63339-0007-60C0-C436-083AC8230908")] = "Linux Reserved";
-
-    // ============================================
-    // 3. ОСНОВНЫЕ ANDROID РАЗДЕЛЫ (AOSP)
-    // ============================================
-
-    // Критичные для загрузки
-    map[QUuid("19A710A2-B37A-11D4-A400-006073657A00")] = "Android Bootloader";
-    map[QUuid("193D1EA4-B3CA-11D4-A086-006073657A00")] = "Android Boot";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC59")] = "Android Vendor Boot";
-
-    // Основные системные
-    map[QUuid("38F428E6-D326-4C41-9C8F-9A6D9B2A6C2F")] = "Android System";
-    map[QUuid("AC6D7924-EBD0-11D1-A90B-00A0C9EE6C1F")] = "Android Vendor";
-    map[QUuid("767941D0-000C-11AA-AA00-4056895D4600")] = "Android Userdata";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC50")] = "Android Cache";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC4F")] = "Android Recovery";
-
-    // Супер-раздел (динамические разделы)
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC5D")] = "Android Super";
-
-    // ============================================
-    // 4. ANDROID ВСПОМОГАТЕЛЬНЫЕ РАЗДЕЛЫ
-    // ============================================
-
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC4E")] = "Android Misc";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC51")] = "Android Metadata";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC52")] = "Android Factory";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC53")] = "Android OEM";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC58")] = "Android Persistent";
-    map[QUuid("AF3DC60F-8384-7C41-9E69-D6D357E6F59C")] = "Android Meta";
-
-    // ============================================
-    // 5. ANDROID АППАРАТНО-ЗАВИСИМЫЕ РАЗДЕЛЫ
-    // ============================================
-
-    // Модем и связь
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC54")] = "Android Modem";
-
-    // Безопасность
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC56")] = "Android Keymaster";
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC57")] = "Android Keystore";
-
-    // Прошивки периферии
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC55")] = "Android DSP";
-
-    // Устройства дерева
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC5A")] = "Android DTBO";
-
-    // Графика
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC5B")] = "Android Logo";
-
-    // Вторичный загрузчик
-    map[QUuid("A2A0D0EB-F5B9-4B7A-B2B9-7B296831BC5C")] = "Android SPL";
-
-    // ============================================
-    // 6. MEDIATEK (MTK) СПЕЦИФИЧНЫЕ
-    // ============================================
-
-    map[QUuid("FBC2C131-6392-4217-B51E-548A6EDB03D0")] = "MTK Protect (EXT4)";
-    map[QUuid("EBC597D0-2053-4B15-8B64-E0AAC75F4DB1")] = "MTK Protect (Backup)";
-    map[QUuid("FE8B0F3E-565D-4D48-950B-8AC3B0A0A3A3")] = "MTK Protect (Factory)";
-    map[QUuid("D3310505-EB5A-4BB0-8D2F-B5C4C0A1A5A5")] = "MTK Protect (OEM)";
-
-    // ДОБАВЛЕНО - Важные MTK разделы
-    map[QUuid("52C6FEC6-2A52-4D3F-9C7B-6A8D7D8A5B9C")] = "MTK Preloader";
-    map[QUuid("EE6F2C31-41D0-446E-B76F-6D1B5A5B8B5B")] = "MTK NVRAM";
-
-    // ============================================
-    // 7. QUALCOMM СПЕЦИФИЧНЫЕ
-    // ============================================
-
-    map[QUuid("DEA0BA2C-CBDD-4805-B4F9-F428251C3E98")] = "QCDT";
-    map[QUuid("098DF793-D712-413D-9CA4-9DDE5B91ED04")] = "QCSBL";
-    map[QUuid("400FFDCD-22E0-47E7-9A23-F16ED9382388")] = "QCOM OEM";
-
-    // ДОБАВЛЕНО - Дополнительные Qualcomm разделы
-    map[QUuid("DEA0BA2C-0000-0000-0000-000000000001")] = "QCOM RPM";
-    map[QUuid("DEA0BA2C-0000-0000-0000-000000000002")] = "QCOM TZ";
-    map[QUuid("DEA0BA2C-0000-0000-0000-000000000003")] = "QCOM Hyp";
-    map[QUuid("50C1D5B5-37A5-4A7F-B5A6-5E5D5A5A5A5A")] = "QCOM DDR";
-
-    // ============================================
-    // 8. SAMSUNG СПЕЦИФИЧНЫЕ
-    // ============================================
-
-    map[QUuid("A0933AC3-214F-4F70-A9A6-8D9B2FE98A07")] = "Samsung EFS";
-    map[QUuid("6C95E238-E343-4BA8-B489-8681ED22AD0B")] = "Samsung PARAM";
-
-    // ДОБАВЛЕНО - Дополнительные Samsung разделы
-    map[QUuid("A0933AC3-0000-0000-0000-000000000001")] = "Samsung CSC";
-    map[QUuid("A0933AC3-0000-0000-0000-000000000002")] = "Samsung OMC";
-    map[QUuid("8F68CC74-0000-0000-0000-000000000000")] = "Samsung Bootloader";
-
-    // ============================================
-    // 9. HUAWEI СПЕЦИФИЧНЫЕ
-    // ============================================
-
-    map[QUuid("8F68CC74-C5E5-48DA-BE91-A0C8C15E9C80")] = "Huawei 3RD";
-    map[QUuid("9FDAA6EF-2B3F-40D2-9A97-DE6C9C8A90D7")] = "Huawei CACHE";
-
-    // ДОБАВЛЕНО - Дополнительные Huawei разделы
-    map[QUuid("8F68CC74-0000-0000-0000-000000000001")] = "Huawei VENDOR";
-    map[QUuid("8F68CC74-0000-0000-0000-000000000002")] = "Huawei CUST";
-    map[QUuid("8F68CC74-0000-0000-0000-000000000003")] = "Huawei PRODUCT";
-
-    // ============================================
-    // 10. GOOGLE СПЕЦИФИЧНЫЕ (Pixel и т.д.)
-    // ============================================
-
-    // ДОБАВЛЕНО
-    map[QUuid("FE8B0F3E-565D-4D48-950B-8AC3B0A0A3A4")] = "Google Factory";
-    map[QUuid("FE8B0F3E-565D-4D48-950B-8AC3B0A0A3A5")] = "Google OTA";
-    map[QUuid("FE8B0F3E-565D-4D48-950B-8AC3B0A0A3A6")] = "Google Misc";
-
-    return map;
+    qDebug() << "База данных GUID инициализирована, записей:" << m_guidMap.size();
 }
 
-QString GuidManager::getPartitionDescription(const QUuid &guid)
+QString GuidManager::getGuidDescription(const QString &guid) const
 {
-    // Ищем GUID в карте
-    auto it = m_guidMap.find(guid);
+    QString normalized = guid.toUpper().trimmed();
+
+    // Убираем фигурные скобки если есть
+    if (normalized.startsWith('{') && normalized.endsWith('}')) {
+        normalized = normalized.mid(1, normalized.length() - 2);
+    }
+
+    // Прямой поиск
+    auto it = m_guidMap.find(normalized);
     if (it != m_guidMap.end()) {
-        return it.value();
+        return it.value().second; // Возвращаем описание
     }
 
-    // Если не найден, возвращаем стандартное описание
-    return "Unknown Partition";
-}
-
-QString GuidManager::getPartitionDescription(const QString &guidString)
-{
-    // Пытаемся преобразовать строку в QUuid
-    QUuid guid = QUuid::fromString(guidString);
-    if (guid.isNull()) {
-        return "Invalid GUID format";
+    // Поиск по частичному совпадению (для Android)
+    for (auto mapIt = m_guidMap.constBegin(); mapIt != m_guidMap.constEnd(); ++mapIt) {
+        if (normalized.contains(mapIt.key())) {
+            return mapIt.value().second;
+        }
     }
 
-    return getPartitionDescription(guid);
+    return "Неизвестный GUID";
 }
 
-bool GuidManager::isAndroidPartition(const QUuid &guid)
+void GuidManager::displayGuidDetails(const QString &guid, QTableWidget *tableWidget)
 {
-    QString description = getPartitionDescription(guid);
-    return description.contains("Android") ||
-           description.contains("MTK") ||
-           description.contains("QCOM") ||
-           description.contains("Samsung") ||
-           description.contains("Huawei") ||
-           description.contains("Google");
+    if (!tableWidget) {
+        return;
+    }
+
+    // Очищаем таблицу
+    tableWidget->setRowCount(0);
+
+    // Настройка таблицы
+    tableWidget->setAlternatingRowColors(true);
+    tableWidget->verticalHeader()->setVisible(false);
+    tableWidget->horizontalHeader()->setStretchLastSection(true);
+
+    // Добавляем информацию о GUID
+    int row = tableWidget->rowCount();
+    tableWidget->insertRow(row);
+
+    tableWidget->setItem(row, 0, new QTableWidgetItem(guid));
+
+    // Поиск описания в базе данных
+    QString normalized = guid.toUpper().trimmed();
+    if (normalized.startsWith('{') && normalized.endsWith('}')) {
+        normalized = normalized.mid(1, normalized.length() - 2);
+    }
+
+    auto it = m_guidMap.find(normalized);
+    if (it != m_guidMap.end()) {
+        tableWidget->setItem(row, 1, new QTableWidgetItem(it.value().first));
+        tableWidget->setItem(row, 2, new QTableWidgetItem(it.value().second));
+    } else {
+        // Проверяем частичное совпадение
+        bool found = false;
+        for (auto mapIt = m_guidMap.constBegin(); mapIt != m_guidMap.constEnd(); ++mapIt) {
+            if (normalized.contains(mapIt.key())) {
+                tableWidget->setItem(row, 1, new QTableWidgetItem(mapIt.value().first));
+                tableWidget->setItem(row, 2, new QTableWidgetItem(mapIt.value().second));
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            tableWidget->setItem(row, 1, new QTableWidgetItem("Unknown"));
+            tableWidget->setItem(row, 2, new QTableWidgetItem("Неизвестный GUID"));
+        }
+    }
+
+    // Добавляем дополнительную информацию
+    addGuidMetadata(guid, tableWidget);
 }
 
-bool GuidManager::isDynamicPartition(const QUuid &guid)
+void GuidManager::addGuid(const QString &guid, const QString &type, const QString &description)
 {
-    // Проверяем, является ли раздел Super разделом (динамическим)
-    QString description = getPartitionDescription(guid);
-    return description.contains("Android Super") ||
-           description.contains("Super");
+    QString normalized = guid.toUpper().trimmed();
+    if (normalized.startsWith('{') && normalized.endsWith('}')) {
+        normalized = normalized.mid(1, normalized.length() - 2);
+    }
+
+    m_guidMap[normalized] = qMakePair(type, description);
 }
+
+bool GuidManager::hasGuid(const QString &guid) const
+{
+    QString normalized = guid.toUpper().trimmed();
+    if (normalized.startsWith('{') && normalized.endsWith('}')) {
+        normalized = normalized.mid(1, normalized.length() - 2);
+    }
+
+    return m_guidMap.contains(normalized);
+}
+
+void GuidManager::addGuidMetadata(const QString &guid, QTableWidget *tableWidget)
+{
+    // Анализ структуры GUID
+    QString normalized = guid.toUpper().trimmed();
+
+    // Убираем фигурные скобки если есть
+    if (normalized.startsWith('{') && normalized.endsWith('}')) {
+        normalized = normalized.mid(1, normalized.length() - 2);
+    }
+
+    // Проверяем формат GUID
+    if (normalized.length() == 36 && normalized.count('-') == 4) {
+        // Извлекаем компоненты GUID
+        QStringList parts = normalized.split('-');
+
+        // Определяем версию GUID по первому компоненту
+        QString timeLow = parts[0];
+        quint32 versionField = parts[2].left(1).toUInt(nullptr, 16);
+
+        QString version;
+        switch (versionField) {
+        case 1: version = "Version 1 (Time-based)"; break;
+        case 2: version = "Version 2 (DCE Security)"; break;
+        case 3: version = "Version 3 (MD5 Hash)"; break;
+        case 4: version = "Version 4 (Random)"; break;
+        case 5: version = "Version 5 (SHA-1 Hash)"; break;
+        default: version = "Unknown Version";
+        }
+
+        int row = tableWidget->rowCount();
+        tableWidget->insertRow(row);
+        tableWidget->setItem(row, 0, new QTableWidgetItem("Версия GUID"));
+        tableWidget->setItem(row, 1, new QTableWidgetItem(version));
+        tableWidget->setItem(row, 2, new QTableWidgetItem(""));
+    }
+}
+
+QString GuidManager::formatGuid(const unsigned char *bytes) const
+{
+    if (!bytes) {
+        return "{INVALID_GUID}";
+    }
+
+    return QString("{%1%2%3%4-%5%6-%7%8-%9%10-%11%12%13%14%15%16}")
+        .arg(bytes[3], 2, 16, QLatin1Char('0'))
+        .arg(bytes[2], 2, 16, QLatin1Char('0'))
+        .arg(bytes[1], 2, 16, QLatin1Char('0'))
+        .arg(bytes[0], 2, 16, QLatin1Char('0'))
+        .arg(bytes[5], 2, 16, QLatin1Char('0'))
+        .arg(bytes[4], 2, 16, QLatin1Char('0'))
+        .arg(bytes[7], 2, 16, QLatin1Char('0'))
+        .arg(bytes[6], 2, 16, QLatin1Char('0'))
+        .arg(bytes[8], 2, 16, QLatin1Char('0'))
+        .arg(bytes[9], 2, 16, QLatin1Char('0'))
+        .arg(bytes[10], 2, 16, QLatin1Char('0'))
+        .arg(bytes[11], 2, 16, QLatin1Char('0'))
+        .arg(bytes[12], 2, 16, QLatin1Char('0'))
+        .arg(bytes[13], 2, 16, QLatin1Char('0'))
+        .arg(bytes[14], 2, 16, QLatin1Char('0'))
+        .arg(bytes[15], 2, 16, QLatin1Char('0'))
+        .toUpper();
+}
+
+
+//05022026-1535
+

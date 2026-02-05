@@ -2,64 +2,67 @@
 #define GUIDMANAGER_H
 
 #include <QObject>
-#include <QMap>
-#include <QUuid>
-#include <QString>
+#include <QTableWidget>
 
 /**
- * @class GuidManager
- * @brief Менеджер для работы с GUID разделами
- *
- * Этот класс содержит полную карту GUID для идентификации
- * типов разделов различных устройств и платформ.
+ * @brief Класс для работы с GUID (Globally Unique Identifier)
+ * Предоставляет информацию о типах разделов по их GUID
  */
 class GuidManager : public QObject
 {
     Q_OBJECT
 
 public:
-    /**
-     * @brief Конструктор класса
-     * @param parent Родительский объект Qt
-     */
     explicit GuidManager(QObject *parent = nullptr);
+    ~GuidManager() = default;
 
     /**
-     * @brief Инициализирует карту GUID
-     * @return Карта GUID->Описание раздела
+     * @brief Получить описание GUID
+     * @param guid GUID для анализа
+     * @return Описание типа раздела
      */
-    QMap<QUuid, QString> initializeGuidMap();
+    QString getGuidDescription(const QString &guid) const;
 
     /**
-     * @brief Получает описание раздела по GUID
-     * @param guid UUID раздела
-     * @return Описание раздела или "Unknown Partition"
+     * @brief Отобразить детальную информацию о GUID в таблице
+     * @param guid GUID для отображения
+     * @param tableWidget Указатель на таблицу
      */
-    QString getPartitionDescription(const QUuid &guid);
+    void displayGuidDetails(const QString &guid, QTableWidget *tableWidget);
 
     /**
-     * @brief Получает описание раздела по строковому GUID
-     * @param guidString Строковое представление GUID
-     * @return Описание раздела или "Unknown Partition"
+     * @brief Добавить GUID в базу данных
+     * @param guid GUID
+     * @param type Тип раздела
+     * @param description Описание
      */
-    QString getPartitionDescription(const QString &guidString);
+    void addGuid(const QString &guid, const QString &type, const QString &description);
 
     /**
-     * @brief Проверяет, является ли раздел Android разделом
-     * @param guid GUID раздела
-     * @return true если это Android раздел
+     * @brief Проверить, существует ли GUID в базе данных
      */
-    bool isAndroidPartition(const QUuid &guid);
-
-    /**
-     * @brief Проверяет, является ли раздел динамическим
-     * @param guid GUID раздела
-     * @return true если это динамический раздел (Super)
-     */
-    bool isDynamicPartition(const QUuid &guid);
+    bool hasGuid(const QString &guid) const;
 
 private:
-    QMap<QUuid, QString> m_guidMap; ///< Карта GUID->Описание
+    /**
+     * @brief Инициализация базы данных GUID
+     */
+    void initGuidDatabase();
+
+    /**
+     * @brief Добавить метаданные GUID в таблицу
+     */
+    void addGuidMetadata(const QString &guid, QTableWidget *tableWidget);
+
+    /**
+     * @brief Форматировать GUID из байтов
+     */
+    QString formatGuid(const unsigned char *bytes) const;
+
+    /**
+     * @brief База данных GUID: GUID -> (Тип, Описание)
+     */
+    QMap<QString, QPair<QString, QString>> m_guidMap;
 };
 
 #endif // GUIDMANAGER_H
