@@ -47,14 +47,15 @@ private slots:
     void on_actionExit_triggered();
     void on_actionAbout_triggered();
 
+    // Слоты для логов
+    void on_clearLogsButton_clicked();
+    void on_saveLogsButton_clicked();
+
     // Слоты для виджетов
     void on_treeWidget_itemDoubleClicked(QTreeWidgetItem *item, int column);
     void on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
     void on_treeWidget_customContextMenuRequested(const QPoint &pos);
     void on_guidTableWidget_itemDoubleClicked(QTableWidgetItem *item);
-
-    // Слоты для логов
-    void on_clearLogsButton_clicked();
 
     // Слот для прогресса файловых операций
     void onFileProgressChanged(int current, int total, const QString &message);
@@ -105,7 +106,6 @@ private:
     QString m_currentImagePath;
     QString m_currentFolderPath;
     QMap<QString, QVariantMap> m_partitionMap;
-    void on_saveLogsButton_clicked();
 };
 
 #endif // MAINWINDOW_H
