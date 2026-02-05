@@ -3,6 +3,7 @@ QT       += core gui widgets
 CONFIG   += c++20
 
 SOURCES += \
+    hexviewer.cpp \
     main.cpp \
     mainwindow.cpp \
     partitionanalyzer.cpp \
@@ -11,6 +12,7 @@ SOURCES += \
     filemanager.cpp
 
 HEADERS += \
+    hexviewer.h \
     mainwindow.h \
     partitionanalyzer.h \
     superanalyzer.h \

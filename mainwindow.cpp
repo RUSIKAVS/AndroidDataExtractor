@@ -1,1314 +1,1041 @@
 #include "mainwindow.h"
-#include "ui_mainwindow.h"
+#include "./ui_mainwindow.h"
 
 #include "partitionanalyzer.h"
-#include "superanalyzer.h"
+#include "hexviewer.h"
 #include "guidmanager.h"
 #include "filemanager.h"
+#include "superanalyzer.h"
 
 #include <QFileDialog>
 #include <QMessageBox>
-#include <QTreeWidgetItem>
-#include <QTableWidgetItem>
-#include <QHeaderView>
-#include <QInputDialog>
 #include <QProgressDialog>
+#include <QDesktopServices>
+#include <QHeaderView>
+#include <QTreeWidgetItem>
+#include <QInputDialog>
+#include <QClipboard>
 #include <QStandardPaths>
-#include <QStyleFactory>
-#include <QApplication>
-#include <QPalette>
-#include <QMenu>
-#include <QAction>
-#include <QFileInfo>
-#include <QIcon>
-#include <QDir>
-#include <QFileInfoList>
-#include <QTimer>
+#include <QSettings>
 #include <QDateTime>
+#include <QTextStream>
+#include <QThread>
+#include <QDebug>
 #include <QTextCursor>
+#include <QFont>
+#include <QFontMetrics>
+#include <QTableWidget>  // Добавьте этот заголовок
 
-// Конструктор главного окна
+/**
+ * @brief Конструктор главного окна
+ * @param parent Родительский виджет
+ */
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_partitionAnalyzer(std::make_unique<PartitionAnalyzer>())
-    , m_superAnalyzer(std::make_unique<SuperAnalyzer>())
-    , m_guidManager(std::make_unique<GuidManager>())
-    , m_fileManager(std::make_unique<FileManager>())
-    , m_statusLabel(nullptr)
-    , m_progressBar(nullptr)
+    , m_partitionAnalyzer(nullptr)
+    , m_hexViewer(nullptr)
+    , m_guidManager(nullptr)
+    , m_fileManager(nullptr)
+    , m_superAnalyzer(nullptr)
+    , m_contextMenu(nullptr)
+    , m_selectedPartitionRow(-1)
 {
     ui->setupUi(this);
 
-    // Инициализация интерфейса
-    initUI();
+    // Инициализация компонентов
+    m_partitionAnalyzer = new PartitionAnalyzer(this);
+    m_hexViewer = new HexViewer(this);
+    m_guidManager = new GuidManager(this);
+    m_fileManager = new FileManager(this);
+    m_superAnalyzer = new SuperAnalyzer(this);
+    m_contextMenu = new QMenu(this);
 
-    // Установка темной темы по умолчанию
-    applyDarkTheme();
+    // Включаем подробное логирование
+    m_partitionAnalyzer->setVerboseLogging(true);
 
-    // Установка заголовка окна
-    setWindowTitle("Android Data Extractor - Отладка");
+    // Настройка интерфейса
+    setupUi();
 
-    // Подключение сигналов прогресса
-    connect(m_fileManager.get(), &FileManager::progressChanged,
-            this, &MainWindow::onFileProgressChanged);
+    // Настройка таблицы разделов
+    setupPartitionsTable();
+
+    // Настройка дерева файлов
+    setupFileTree();
+
+    // Настройка соединений сигналов и слотов
+    setupConnections();
+
+    // Загрузка настроек
+    loadSettings();
+
+    // Начальное сообщение в лог
+    logMessage("Android Data Extractor инициализирован");
+    logMessage("Выберите файл для анализа");
+
+    qDebug() << "MainWindow: Инициализация завершена";
 }
 
-// Деструктор
-MainWindow::~MainWindow()
+/**
+ * @brief Логирует сообщение
+ * @param message Сообщение для логирования
+ */
+void MainWindow::logMessage(const QString &message)
 {
-    delete ui;
+    QString timestamp = QDateTime::currentDateTime().toString("[HH:mm:ss]");
+    QString fullMessage = timestamp + " " + message;
+
+    // Отправляем в onLogMessage для отображения в UI
+    onLogMessage(fullMessage);
+    qDebug().noquote() << fullMessage;
 }
 
-// Инициализация пользовательского интерфейса
-void MainWindow::initUI()
+/**
+ * @brief Настройка таблицы разделов
+ */
+void MainWindow::setupPartitionsTable()
 {
-    // Настройка дерева разделов
-    setupTreeWidget();
-
-    // Настройка таблицы GUID
-    setupGuidTable();
-
-    // Настройка hex-просмотрщика
-    setupHexViewer();
-
-    // Настройка логов
-    setupLogsViewer();
-
-    // Настройка статусной строки
-    setupStatusBar();
-
-    // Настройка меню и панели инструментов
-    setupMenuAndToolbar();
-
-    // Подключение сигналов и слотов
-    connectSignalsSlots();
-}
-
-// Настройка виджета дерева разделов
-void MainWindow::setupTreeWidget()
-{
-    // Установка количества колонок и заголовков
-    ui->treeWidget->setColumnCount(4);
-    ui->treeWidget->setHeaderLabels({"Имя", "Размер", "GUID", "Тип"});
-
-    // Настройка отображения колонок
-    ui->treeWidget->setAlternatingRowColors(true);
-    ui->treeWidget->setAnimated(true);
-
-    // Настройка поведения заголовков
-    QHeaderView* header = ui->treeWidget->header();
-    header->setStretchLastSection(false);
-    header->setSectionResizeMode(0, QHeaderView::Stretch);    // Имя - растягиваем
-    header->setSectionResizeMode(1, QHeaderView::ResizeToContents); // Размер - по содержимому
-    header->setSectionResizeMode(2, QHeaderView::ResizeToContents); // GUID - по содержимому
-    header->setSectionResizeMode(3, QHeaderView::ResizeToContents); // Тип - по содержимому
-
-    // Включение контекстного меню
-    ui->treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-}
-
-// Настройка таблицы GUID
-void MainWindow::setupGuidTable()
-{
-    // Установка количества колонок и заголовков
-    ui->guidTableWidget->setColumnCount(4);
-    ui->guidTableWidget->setHorizontalHeaderLabels({"GUID", "Тип", "Описание", "Раздел"});
-
-    // Настройка отображения
-    ui->guidTableWidget->setAlternatingRowColors(true);
-    ui->guidTableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->guidTableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->guidTableWidget->setShowGrid(true);
-
-    // Настройка поведения заголовков
-    ui->guidTableWidget->horizontalHeader()->setStretchLastSection(true);
-    ui->guidTableWidget->verticalHeader()->setVisible(false);
-}
-
-// Настройка hex-просмотрщика (упрощенная версия)
-void MainWindow::setupHexViewer()
-{
-    QFont font("Courier New", 10);
-    ui->hexViewer->setFont(font);
-    ui->hexViewer->setReadOnly(true);
-    ui->hexViewer->setLineWrapMode(QPlainTextEdit::NoWrap);
-}
-
-// Настройка логов
-void MainWindow::setupLogsViewer()
-{
-    QFont font("Courier New", 9);
-    ui->logsTextEdit->setFont(font);
-    ui->logsTextEdit->setReadOnly(true);
-    ui->logsTextEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
-}
-
-// Настройка статусной строки
-void MainWindow::setupStatusBar()
-{
-    // Создание постоянных виджетов в статусной строке
-    m_statusLabel = new QLabel("Готово");
-    ui->statusbar->addWidget(m_statusLabel);
-
-    m_progressBar = new QProgressBar();
-    m_progressBar->setVisible(false);
-    m_progressBar->setMaximumWidth(200);
-    ui->statusbar->addPermanentWidget(m_progressBar);
-}
-
-// Настройка меню и панели инструментов (упрощенная версия)
-void MainWindow::setupMenuAndToolbar()
-{
-    // Используем системные иконки Qt
-    QIcon openIcon = QIcon::fromTheme("document-open");
-    QIcon folderIcon = QIcon::fromTheme("folder-open");
-    QIcon extractIcon = QIcon::fromTheme("document-save-as");
-    QIcon analyzeIcon = QIcon::fromTheme("edit-find");
-    QIcon exitIcon = QIcon::fromTheme("application-exit");
-    QIcon darkIcon = QIcon::fromTheme("weather-clear-night");
-    QIcon lightIcon = QIcon::fromTheme("weather-clear");
-    QIcon aboutIcon = QIcon::fromTheme("help-about");
-
-    // Настраиваем иконки действий
-    ui->actionOpenImage->setIcon(openIcon);
-    ui->actionOpenFolder->setIcon(folderIcon);
-    ui->actionExtractPartition->setIcon(extractIcon);
-    ui->actionAnalyzeSuper->setIcon(analyzeIcon);
-    ui->actionExit->setIcon(exitIcon);
-    ui->actionDarkTheme->setIcon(darkIcon);
-    ui->actionLightTheme->setIcon(lightIcon);
-    ui->actionAbout->setIcon(aboutIcon);
-
-    // Иконки для кнопок логов (если они есть в UI)
-    if (ui->clearLogsButton) {
-        ui->clearLogsButton->setIcon(QIcon::fromTheme("edit-clear"));
-    }
-    if (ui->saveLogsButton) {
-        ui->saveLogsButton->setIcon(QIcon::fromTheme("document-save"));
-    }
-}
-
-// Подключение сигналов и слотов
-void MainWindow::connectSignalsSlots()
-{
-    // Подключение сигналов дерева разделов
-    connect(ui->treeWidget, &QTreeWidget::itemDoubleClicked,
-            this, &MainWindow::on_treeWidget_itemDoubleClicked);
-
-    connect(ui->treeWidget, &QTreeWidget::currentItemChanged,
-            this, &MainWindow::on_treeWidget_currentItemChanged);
-
-    connect(ui->treeWidget, &QTreeWidget::customContextMenuRequested,
-            this, &MainWindow::on_treeWidget_customContextMenuRequested);
-
-    // Подключение сигналов таблицы GUID
-    connect(ui->guidTableWidget, &QTableWidget::itemDoubleClicked,
-            this, &MainWindow::on_guidTableWidget_itemDoubleClicked);
-
-    // Подключение кнопок логов
-    connect(ui->clearLogsButton, &QPushButton::clicked,
-            this, &MainWindow::on_clearLogsButton_clicked);
-    connect(ui->saveLogsButton, &QPushButton::clicked,
-            this, &::MainWindow::on_saveLogsButton_clicked);
-}
-
-// Применение темной темы
-void MainWindow::applyDarkTheme()
-{
-    // Создание темной палитры
-    QPalette darkPalette;
-
-    // Настройка основных цветов
-    darkPalette.setColor(QPalette::Window, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::WindowText, Qt::white);
-    darkPalette.setColor(QPalette::Base, QColor(25, 25, 25));
-    darkPalette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ToolTipBase, Qt::white);
-    darkPalette.setColor(QPalette::ToolTipText, Qt::white);
-    darkPalette.setColor(QPalette::Text, Qt::white);
-    darkPalette.setColor(QPalette::Button, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ButtonText, Qt::white);
-    darkPalette.setColor(QPalette::BrightText, Qt::red);
-    darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::HighlightedText, Qt::black);
-
-    // Настройка цветов для отключенных элементов
-    darkPalette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
-    darkPalette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
-
-    // Применение палитры ко всему приложению
-    qApp->setPalette(darkPalette);
-
-    // Установка стиля Fusion
-    qApp->setStyle(QStyleFactory::create("Fusion"));
-
-    // Дополнительные стили для виджетов
-    QString styleSheet = R"(
-        QTreeWidget {
-            background-color: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #555555;
-            alternate-background-color: #353535;
-        }
-        QTreeWidget::item {
-            padding: 4px;
-        }
-        QTreeWidget::item:hover {
-            background-color: #3a3a3a;
-        }
-        QTreeWidget::item:selected {
-            background-color: #2a82da;
-            color: #ffffff;
-        }
-        QTableWidget {
-            background-color: #2d2d2d;
-            color: #ffffff;
-            gridline-color: #555555;
-            alternate-background-color: #353535;
-        }
-        QTableWidget::item:hover {
-            background-color: #3a3a3a;
-        }
-        QTableWidget::item:selected {
-            background-color: #2a82da;
-            color: #ffffff;
-        }
-        QHeaderView::section {
-            background-color: #2b2b2b;
-            color: #ffffff;
-            padding: 5px;
-            border: 1px solid #555555;
-        }
-        QStatusBar {
-            background-color: #2b2b2b;
-            color: #ffffff;
-        }
-        QMenuBar {
-            background-color: #2b2b2b;
-            color: #ffffff;
-        }
-        QMenuBar::item:selected {
-            background-color: #3a3a3a;
-        }
-        QMenu {
-            background-color: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #555555;
-        }
-        QMenu::item:selected {
-            background-color: #2a82da;
-        }
-        QToolBar {
-            background-color: #2b2b2b;
-            border: none;
-            spacing: 3px;
-        }
-        QToolButton {
-            background-color: transparent;
-            border: 1px solid transparent;
-            padding: 3px;
-        }
-        QToolButton:hover {
-            background-color: #3a3a3a;
-            border: 1px solid #555555;
-        }
-        QTabWidget::pane {
-            border: 1px solid #555555;
-            background-color: #2d2d2d;
-        }
-        QTabBar::tab {
-            background-color: #353535;
-            color: #ffffff;
-            padding: 8px 16px;
-            margin-right: 2px;
-        }
-        QTabBar::tab:selected {
-            background-color: #2a82da;
-        }
-        QTabBar::tab:hover:!selected {
-            background-color: #3a3a3a;
-        }
-        QPlainTextEdit {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border: 1px solid #555555;
-            font-family: 'Courier New';
-        }
-        QPushButton {
-            background-color: #3a3a3a;
-            color: #ffffff;
-            border: 1px solid #555555;
-            padding: 5px 10px;
-        }
-        QPushButton:hover {
-            background-color: #4a4a4a;
-        }
-        QCheckBox {
-            color: #ffffff;
-        }
-        QComboBox {
-            background-color: #3a3a3a;
-            color: #ffffff;
-            border: 1px solid #555555;
-        }
-        QLineEdit {
-            background-color: #3a3a3a;
-            color: #ffffff;
-            border: 1px solid #555555;
-        }
-    )";
-
-    qApp->setStyleSheet(styleSheet);
-}
-
-// Применение светлой темы
-void MainWindow::applyLightTheme()
-{
-    // Сброс стилей и применение стандартной палитры
-    qApp->setStyleSheet("");
-    qApp->setPalette(style()->standardPalette());
-    qApp->setStyle(QStyleFactory::create("Fusion"));
-}
-
-// Добавить сообщение в лог
-void MainWindow::logMessage(const QString &message, const QString &type)
-{
-    if (!ui->logsTextEdit) {
+    // Проверяем, существует ли таблица
+    if (!ui->partitionsTable) {
+        qDebug() << "Внимание: таблица partitionsTable не найдена в UI!";
         return;
     }
 
-    QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    QString formattedMessage;
+    // Установка заголовков таблицы разделов
+    QStringList headers = {"Имя", "Смещение (hex)", "Размер", "Тип", "GUID", "Статус", "LBA"};
+    ui->partitionsTable->setColumnCount(headers.size());
+    ui->partitionsTable->setHorizontalHeaderLabels(headers);
 
-    if (type == "error") {
-        formattedMessage = QString("[%1] <font color='red'><b>ОШИБКА:</b> %2</font>").arg(timestamp, message);
-    } else if (type == "warning") {
-        formattedMessage = QString("[%1] <font color='orange'><b>ПРЕДУПРЕЖДЕНИЕ:</b> %2</font>").arg(timestamp, message);
-    } else if (type == "success") {
-        formattedMessage = QString("[%1] <font color='green'><b>УСПЕХ:</b> %2</font>").arg(timestamp, message);
+    // Настройка поведения таблицы
+    ui->partitionsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->partitionsTable->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    ui->partitionsTable->setAlternatingRowColors(true);
+    ui->partitionsTable->setSortingEnabled(true);
+    ui->partitionsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->partitionsTable->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    // Настройка заголовков
+    QHeaderView* header = ui->partitionsTable->horizontalHeader();
+    header->setStretchLastSection(false);
+    header->setSectionResizeMode(0, QHeaderView::Interactive);   // Имя
+    header->setSectionResizeMode(1, QHeaderView::ResizeToContents); // Смещение
+    header->setSectionResizeMode(2, QHeaderView::ResizeToContents); // Размер
+    header->setSectionResizeMode(3, QHeaderView::ResizeToContents); // Тип
+    header->setSectionResizeMode(4, QHeaderView::Interactive);   // GUID
+    header->setSectionResizeMode(5, QHeaderView::ResizeToContents); // Статус
+    header->setSectionResizeMode(6, QHeaderView::ResizeToContents); // LBA
+
+    // Установка ширины колонок
+    ui->partitionsTable->setColumnWidth(0, 120);  // Имя
+    ui->partitionsTable->setColumnWidth(1, 100);  // Смещение
+    ui->partitionsTable->setColumnWidth(2, 100);  // Размер
+    ui->partitionsTable->setColumnWidth(3, 120);  // Тип
+    ui->partitionsTable->setColumnWidth(4, 250);  // GUID
+    ui->partitionsTable->setColumnWidth(5, 100);  // Статус
+    ui->partitionsTable->setColumnWidth(6, 80);   // LBA
+
+    logMessage("Таблица разделов настроена");
+}
+
+
+
+
+
+
+/**
+ * @brief Деструктор главного окна
+ */
+MainWindow::~MainWindow()
+{
+    // Сохранение настроек перед закрытием
+    saveSettings();
+
+    // Объекты с родителем this будут удалены автоматически Qt
+    delete ui;
+
+    qDebug() << "MainWindow: Деструктор вызван";
+}
+
+/**
+ * @brief Настройка дерева файлов
+ */
+void MainWindow::setupFileTree()
+{
+    // Установка заголовков для дерева файлов
+    ui->fileTreeWidget->setColumnCount(3);
+    ui->fileTreeWidget->setHeaderLabels({"Имя файла", "Размер", "Тип"});
+
+    // Настройка дерева файлов
+    ui->fileTreeWidget->setAlternatingRowColors(true);
+    ui->fileTreeWidget->setAnimated(true);
+    ui->fileTreeWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    ui->fileTreeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    // Настройка заголовков дерева
+    QHeaderView* treeHeader = ui->fileTreeWidget->header();
+    treeHeader->setStretchLastSection(false);
+    treeHeader->setSectionResizeMode(0, QHeaderView::Stretch);  // Имя файла
+    treeHeader->setSectionResizeMode(1, QHeaderView::ResizeToContents);  // Размер
+    treeHeader->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Тип
+
+    logMessage("Дерево файлов настроено");
+}
+
+/**
+ * @brief Настройка пользовательского интерфейса
+ */
+void MainWindow::setupUi()
+{
+    // Настройка заголовка окна
+    setWindowTitle("Android Data Extractor v1.0");
+
+    // Настройка прогресс-бара
+    ui->progressBar->setRange(0, 100);
+    ui->progressBar->setValue(0);
+    ui->progressBar->setTextVisible(true);
+    ui->progressBar->setFormat("%p%");
+
+    // Настройка Hex Viewer
+    if (m_hexViewer) {
+        // HexViewer теперь сам является QWidget
+        ui->scrollArea->setWidget(m_hexViewer);
+        logMessage("Hex Viewer установлен в scrollArea");
+
+        // Загружаем тестовые данные для демонстрации
+        QByteArray testData;
+        for (int i = 0; i < 256; ++i) {
+            testData.append(static_cast<char>(i));
+        }
+        m_hexViewer->loadDataFromMemory(testData);
+        logMessage("Загружены тестовые данные в Hex Viewer (256 байт)");
     } else {
-        formattedMessage = QString("[%1] %2").arg(timestamp, message);
+        logMessage("ВНИМАНИЕ: Hex Viewer не инициализирован");
     }
 
-    // Добавляем HTML
-    ui->logsTextEdit->appendHtml(formattedMessage);
+    // Настройка текстового поля для суперблока
+    ui->superBlockText->setFont(QFont("Courier New", 10));
+    ui->superBlockText->setReadOnly(true);
+    ui->superBlockText->setWordWrapMode(QTextOption::NoWrap);
 
-    // Автопрокрутка если включена
-    if (ui->autoScrollCheckBox && ui->autoScrollCheckBox->isChecked()) {
-        QTextCursor cursor = ui->logsTextEdit->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        ui->logsTextEdit->setTextCursor(cursor);
+    // Установка начального пути для извлечения
+    QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                          + "/AndroidExtractor";
+    ui->extractPathEdit->setText(defaultPath);
+
+    // Настройка контекстного меню для таблицы разделов
+    if (!m_contextMenu) {
+        m_contextMenu = new QMenu(this);
     }
+
+    m_contextMenu->addAction("Копировать имя раздела", this, &MainWindow::copyPartitionName);
+    m_contextMenu->addAction("Копировать GUID", this, &MainWindow::copyPartitionGuid);
+    m_contextMenu->addAction("Копировать смещение", this, &MainWindow::copyPartitionOffset);
+    m_contextMenu->addSeparator();
+    m_contextMenu->addAction("Показать в Hex Viewer", this, &MainWindow::showInHexViewer);
+    m_contextMenu->addAction("Экспортировать информацию", this, [this]() {
+        QMessageBox::information(this, "Информация", "Функция экспорта в разработке");
+    });
+
+    // Настройка шрифта для логов
+    QFont logFont("Monospace", 9);
+    logFont.setStyleHint(QFont::TypeWriter);
+    ui->logTextEdit->setFont(logFont);
+
+    logMessage("Пользовательский интерфейс настроен");
 }
 
-// Обновление статусной строки
-void MainWindow::updateStatusBar(const QString& message, int timeout)
+/**
+ * @brief Настройка соединений сигналов и слотов
+ */
+void MainWindow::setupConnections()
 {
-    if (m_statusLabel) {
-        m_statusLabel->setText(message);
+    // ========== Кнопки управления файлами ==========
+    connect(ui->browseButton, &QPushButton::clicked,
+            this, &MainWindow::onBrowseClicked);
+    connect(ui->scanButton, &QPushButton::clicked,
+            this, &MainWindow::onScanClicked);
+
+    // ========== Кнопки извлечения данных ==========
+    connect(ui->extractButton, &QPushButton::clicked,
+            this, &MainWindow::onExtractClicked);
+    connect(ui->extractAllButton, &QPushButton::clicked,
+            this, &MainWindow::onExtractAllClicked);
+
+    // ========== Кнопки файлового менеджера ==========
+    connect(ui->refreshFilesButton, &QPushButton::clicked,
+            this, &MainWindow::onRefreshFilesClicked);
+    connect(ui->extractFileButton, &QPushButton::clicked,
+            this, &MainWindow::onExtractFileClicked);
+    connect(ui->findFilesButton, &QPushButton::clicked,
+            this, &MainWindow::onFindFilesClicked);
+
+    // ========== Кнопки анализа суперблока ==========
+    connect(ui->analyzeSuperButton, &QPushButton::clicked,
+            this, &MainWindow::onAnalyzeSuperClicked);
+
+    // ========== Кнопки настроек ==========
+    connect(ui->browseExtractButton, &QPushButton::clicked,
+            this, &MainWindow::onBrowseExtractClicked);
+    connect(ui->saveSettingsButton, &QPushButton::clicked,
+            this, &MainWindow::onSaveSettingsClicked);
+    connect(ui->defaultSettingsButton, &QPushButton::clicked,
+            this, &MainWindow::onDefaultSettingsClicked);
+
+    // ========== Кнопка сохранения отчета ==========
+    connect(ui->saveReportButton, &QPushButton::clicked,
+            this, &MainWindow::onSaveReportClicked);
+
+    // ========== Контекстное меню таблицы разделов ==========
+    connect(ui->partitionsTable, &QTableWidget::customContextMenuRequested,
+            this, &MainWindow::showPartitionContextMenu);
+
+    // ========== Двойные клики ==========
+    connect(ui->partitionsTable, &QTableWidget::itemDoubleClicked,
+            this, &MainWindow::onPartitionDoubleClicked);
+    connect(ui->fileTreeWidget, &QTreeWidget::itemDoubleClicked,
+            this, &MainWindow::onFileDoubleClicked);
+
+    // ========== Сигналы от PartitionAnalyzer ==========
+    if (m_partitionAnalyzer) {
+        connect(m_partitionAnalyzer, &PartitionAnalyzer::progressUpdated,
+                ui->progressBar, &QProgressBar::setValue);
+        connect(m_partitionAnalyzer, &PartitionAnalyzer::analysisComplete,
+                this, &MainWindow::onAnalysisComplete);
+        connect(m_partitionAnalyzer, &PartitionAnalyzer::errorOccurred,
+                this, &MainWindow::showError);
+        connect(m_partitionAnalyzer, &PartitionAnalyzer::logMessage,
+                this, &MainWindow::onLogMessage);
     }
-    if (timeout > 0) {
-        ui->statusbar->showMessage(message, timeout);
-    }
+
+    // ========== Кнопки управления логами ==========
+    connect(ui->clearLogButton, &QPushButton::clicked,
+            this, &MainWindow::onClearLogClicked);
+    connect(ui->saveLogButton, &QPushButton::clicked,
+            this, &MainWindow::onSaveLogClicked);
+    connect(ui->copyLogButton, &QPushButton::clicked,
+            this, &MainWindow::onCopyLogClicked);
+    connect(ui->autoScrollCheckBox, &QCheckBox::stateChanged,
+            this, &MainWindow::onAutoScrollChanged);
+
+    // ========== Меню Файл ==========
+    connect(ui->actionOpen, &QAction::triggered,
+            this, &MainWindow::onBrowseClicked);
+    connect(ui->actionExit, &QAction::triggered,
+            this, &QWidget::close);
+
+    // ========== Меню Инструменты ==========
+    connect(ui->actionAnalyzePartitions, &QAction::triggered,
+            this, &MainWindow::onScanClicked);
+    connect(ui->actionHexView, &QAction::triggered, this, [this]() {
+        ui->tabWidget->setCurrentIndex(1);  // Переключаем на вкладку Hex Viewer
+        logMessage("Переключено на вкладку Hex Viewer");
+    });
+    connect(ui->actionScanFiles, &QAction::triggered,
+            this, &MainWindow::onRefreshFilesClicked);
+
+    // ========== Меню Справка ==========
+    connect(ui->actionAbout, &QAction::triggered,
+            this, &MainWindow::showAboutDialog);
+    connect(ui->actionDocumentation, &QAction::triggered,
+            this, &MainWindow::showDocumentation);
+    connect(ui->actionViewLogs, &QAction::triggered, this, [this]() {
+        ui->tabWidget->setCurrentIndex(5); // Переключаем на вкладку логов
+        logMessage("Переключено на вкладку логов");
+    });
+
+    logMessage("Соединения сигналов и слотов настроены");
 }
 
-// Показать/скрыть прогресс
-void MainWindow::showProgress(bool show, int maximum)
+/**
+ * @brief Загрузка настроек приложения
+ */
+void MainWindow::loadSettings()
 {
-    if (m_progressBar) {
-        m_progressBar->setVisible(show);
-        m_progressBar->setMaximum(maximum);
-        if (!show) {
-            m_progressBar->setValue(0);
+    QSettings settings("AndroidExtractor", "AndroidDataExtractor");
+
+    // Загрузка пути для извлечения
+    QString extractPath = settings.value("extractPath",
+                                         QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/AndroidExtractor").toString();
+    ui->extractPathEdit->setText(extractPath);
+
+    // Загрузка настроек логов
+    bool saveLogs = settings.value("saveLogs", true).toBool();
+    ui->saveLogsCheckBox->setChecked(saveLogs);
+
+    // Загрузка уровня детализации
+    int detailLevel = settings.value("detailLevel", 1).toInt();
+    ui->detailLevelCombo->setCurrentIndex(qBound(0, detailLevel, 2));
+
+    // Загрузка настройки автопрокрутки логов
+    bool autoScroll = settings.value("autoScroll", true).toBool();
+    ui->autoScrollCheckBox->setChecked(autoScroll);
+
+    // Загрузка геометрии окна
+    if (settings.contains("geometry")) {
+        restoreGeometry(settings.value("geometry").toByteArray());
+    }
+
+    // Загрузка состояния окна
+    if (settings.contains("windowState")) {
+        restoreState(settings.value("windowState").toByteArray());
+    }
+
+    // Загрузка последнего пути к файлу
+    QString lastFilePath = settings.value("lastFilePath", "").toString();
+    if (!lastFilePath.isEmpty() && QFileInfo::exists(lastFilePath)) {
+        ui->filePathEdit->setText(lastFilePath);
+    }
+
+    // Загрузка индекса текущей вкладки
+    int currentTab = settings.value("currentTab", 0).toInt();
+    ui->tabWidget->setCurrentIndex(qBound(0, currentTab, ui->tabWidget->count() - 1));
+
+    logMessage("Настройки загружены");
+}
+
+/**
+ * @brief Сохранение настроек приложения
+ */
+void MainWindow::saveSettings()
+{
+    QSettings settings("AndroidExtractor", "AndroidDataExtractor");
+
+    // Сохранение пути для извлечения
+    settings.setValue("extractPath", ui->extractPathEdit->text());
+
+    // Сохранение настроек логов
+    settings.setValue("saveLogs", ui->saveLogsCheckBox->isChecked());
+
+    // Сохранение уровня детализации
+    settings.setValue("detailLevel", ui->detailLevelCombo->currentIndex());
+
+    // Сохранение настройки автопрокрутки логов
+    settings.setValue("autoScroll", ui->autoScrollCheckBox->isChecked());
+
+    // Сохранение геометрии окна
+    settings.setValue("geometry", saveGeometry());
+
+    // Сохранение состояния окна
+    settings.setValue("windowState", saveState());
+
+    // Сохранение последнего пути к файлу
+    if (!ui->filePathEdit->text().isEmpty()) {
+        settings.setValue("lastFilePath", ui->filePathEdit->text());
+    }
+
+    // Сохранение индекса текущей вкладки
+    settings.setValue("currentTab", ui->tabWidget->currentIndex());
+
+    settings.sync();
+    logMessage("Настройки сохранены");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Обзор..."
+ */
+void MainWindow::onBrowseClicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                                    "Выберите файл образа или устройство",
+                                                    QDir::homePath(),
+                                                    "Все файлы (*.*);;"
+                                                    "Образы дисков (*.img *.bin *.raw *.dmp);;"
+                                                    "Файлы Android (*.img *.mbn *.sin);;"
+                                                    "Текстовые файлы (*.txt *.log)");
+
+    if (!fileName.isEmpty()) {
+        ui->filePathEdit->setText(fileName);
+        logMessage(QString("Выбран файл: %1").arg(fileName));
+
+        // Проверяем размер файла
+        QFileInfo fileInfo(fileName);
+        if (fileInfo.exists()) {
+            qint64 fileSize = fileInfo.size();
+            logMessage(QString("Размер файла: %1 байт (%2)").arg(fileSize).arg(formatFileSize(fileSize)));
         }
     }
 }
 
-// Обновить прогресс
-void MainWindow::updateProgress(int value)
+/**
+ * @brief Слот для обработки нажатия кнопки "Сканировать"
+ */
+void MainWindow::onScanClicked()
 {
-    if (m_progressBar && m_progressBar->isVisible()) {
-        m_progressBar->setValue(value);
+    QString filePath = ui->filePathEdit->text().trimmed();
+
+    if (filePath.isEmpty()) {
+        showError("Пожалуйста, выберите файл для анализа.");
+        return;
+    }
+
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists()) {
+        showError(QString("Файл '%1' не существует.").arg(filePath));
+        return;
+    }
+
+    if (!fileInfo.isReadable()) {
+        showError(QString("Файл '%1' недоступен для чтения.").arg(filePath));
+        return;
+    }
+
+    logMessage(QString("Начинаю анализ файла: %1").arg(filePath));
+
+    // Очистка предыдущих результатов
+    ui->partitionsTable->setRowCount(0);
+    ui->fileTreeWidget->clear();
+    ui->superBlockText->clear();
+
+    // Сброс прогресс-бара
+    ui->progressBar->setValue(0);
+
+    // Блокировка интерфейса на время анализа
+    setUiEnabled(false);
+
+    // Запуск анализа
+    bool success = m_partitionAnalyzer->analyzePartitions(filePath);
+
+    if (!success) {
+        QString errorMsg = m_partitionAnalyzer->lastError();
+        if (errorMsg.isEmpty()) {
+            errorMsg = "Анализ разделов завершился с ошибкой.";
+        }
+        showError(errorMsg);
+        setUiEnabled(true);
+    }
+
+    // Разблокировка интерфейса произойдет в onAnalysisComplete или showError
+}
+
+/**
+ * @brief Слот для обработки завершения анализа разделов
+ * @param success Успешность анализа
+ */
+void MainWindow::onAnalysisComplete(bool success)
+{
+    setUiEnabled(true);
+
+    if (!success) {
+        showError("Анализ разделов завершился с ошибкой.");
+        return;
+    }
+
+    // Получение результатов анализа
+    const auto& partitions = m_partitionAnalyzer->getPartitions();
+
+    logMessage(QString("Анализ завершен. Найдено %1 разделов").arg(partitions.size()));
+
+    // Отображение разделов в таблице
+    ui->partitionsTable->setRowCount(partitions.size());
+
+    for (int i = 0; i < partitions.size(); ++i) {
+        const auto& part = partitions[i];
+
+        // Создаем элементы таблицы
+        QTableWidgetItem* nameItem = new QTableWidgetItem(part.name);
+        QTableWidgetItem* offsetItem = new QTableWidgetItem(QString("0x%1").arg(part.offset, 0, 16));
+        QTableWidgetItem* sizeItem = new QTableWidgetItem(formatFileSize(part.size));
+        QTableWidgetItem* typeItem = new QTableWidgetItem(part.type);
+        QTableWidgetItem* guidItem = new QTableWidgetItem(part.guid);
+        QTableWidgetItem* statusItem = new QTableWidgetItem(part.isMounted ? "Смонтирован" : "Не смонтирован");
+        QTableWidgetItem* lbaItem = new QTableWidgetItem(QString("%1-%2").arg(part.startLba).arg(part.endLba));
+
+        // Устанавливаем выравнивание
+        offsetItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        sizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        lbaItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+        // Устанавливаем всплывающие подсказки
+        nameItem->setToolTip(part.name);
+        offsetItem->setToolTip(QString("Смещение: %1 байт").arg(part.offset));
+        sizeItem->setToolTip(QString("Размер: %1 байт").arg(part.size));
+        typeItem->setToolTip(QString("Тип: %1\nGUID типа: %2").arg(part.type).arg(part.typeGuid));
+        guidItem->setToolTip(part.guid);
+        lbaItem->setToolTip(QString("LBA: %1 - %2").arg(part.startLba).arg(part.endLba));
+
+        // Добавляем элементы в таблицу
+        ui->partitionsTable->setItem(i, 0, nameItem);
+        ui->partitionsTable->setItem(i, 1, offsetItem);
+        ui->partitionsTable->setItem(i, 2, sizeItem);
+        ui->partitionsTable->setItem(i, 3, typeItem);
+        ui->partitionsTable->setItem(i, 4, guidItem);
+        ui->partitionsTable->setItem(i, 5, statusItem);
+        ui->partitionsTable->setItem(i, 6, lbaItem);
+    }
+
+    // Сортировка по смещению
+    ui->partitionsTable->sortByColumn(1, Qt::AscendingOrder);
+
+    // Активация кнопок извлечения
+    bool hasPartitions = partitions.size() > 0;
+    ui->extractButton->setEnabled(hasPartitions);
+    ui->extractAllButton->setEnabled(hasPartitions);
+
+    // Показываем информационное сообщение
+    QString message = QString("Анализ завершен. Найдено %1 разделов.").arg(partitions.size());
+    logMessage(message);
+
+    // Автопереключение на вкладку логов для просмотра деталей
+    if (partitions.size() > 0) {
+        ui->tabWidget->setCurrentIndex(5); // Вкладка логов
+        logMessage("Для просмотра деталей анализа перейдите на вкладку 'Логи'");
     }
 }
 
-// Слот для очистки логов
-void MainWindow::on_clearLogsButton_clicked()
+/**
+ * @brief Форматирует размер файла в читаемый вид
+ * @param size Размер в байтах
+ * @return Отформатированная строка
+ */
+QString MainWindow::formatFileSize(qint64 size)
 {
-    if (ui->logsTextEdit) {
-        ui->logsTextEdit->clear();
-        logMessage("Логи очищены", "info");
+    constexpr qint64 KB = 1024;
+    constexpr qint64 MB = KB * 1024;
+    constexpr qint64 GB = MB * 1024;
+    constexpr qint64 TB = GB * 1024;
+
+    if (size >= TB) {
+        return QString("%1 ТБ").arg(size / (double)TB, 0, 'f', 2);
+    } else if (size >= GB) {
+        return QString("%1 ГБ").arg(size / (double)GB, 0, 'f', 2);
+    } else if (size >= MB) {
+        return QString("%1 МБ").arg(size / (double)MB, 0, 'f', 2);
+    } else if (size >= KB) {
+        return QString("%1 КБ").arg(size / (double)KB, 0, 'f', 2);
+    } else {
+        return QString("%1 Б").arg(size);
     }
 }
 
-// Слот для сохранения логов
-void MainWindow::on_saveLogsButton_clicked()
+/**
+ * @brief Включает/отключает элементы интерфейса
+ * @param enabled true для включения, false для отключения
+ */
+void MainWindow::setUiEnabled(bool enabled)
+{
+    ui->browseButton->setEnabled(enabled);
+    ui->scanButton->setEnabled(enabled);
+    ui->extractButton->setEnabled(enabled && ui->partitionsTable->rowCount() > 0);
+    ui->extractAllButton->setEnabled(enabled && ui->partitionsTable->rowCount() > 0);
+
+    // Обновление статуса
+    if (enabled) {
+        ui->statusbar->showMessage("Готов", 2000);
+    } else {
+        ui->statusbar->showMessage("Анализ в процессе...");
+    }
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Извлечь выбранное"
+ */
+void MainWindow::onExtractClicked()
+{
+    QList<QTableWidgetItem*> selectedItems = ui->partitionsTable->selectedItems();
+    if (selectedItems.isEmpty()) {
+        showError("Пожалуйста, выберите разделы для извлечения.");
+        return;
+    }
+
+    QSet<int> selectedRows;
+    for (auto item : selectedItems) {
+        selectedRows.insert(item->row());
+    }
+
+    logMessage(QString("Запрошено извлечение %1 разделов").arg(selectedRows.size()));
+
+    // Показываем диалог подтверждения
+    QStringList partitionNames;
+    for (int row : selectedRows) {
+        QTableWidgetItem* nameItem = ui->partitionsTable->item(row, 0);
+        if (nameItem) {
+            partitionNames.append(nameItem->text());
+        }
+    }
+
+    QString message = QString("Вы действительно хотите извлечь следующие разделы?\n\n%1\n\nФункция находится в разработке.")
+                          .arg(partitionNames.join("\n"));
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Подтверждение", message,
+                                                              QMessageBox::Yes | QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        logMessage("Извлечение разделов отменено (функция в разработке)");
+        QMessageBox::information(this, "Информация", "Функция извлечения разделов находится в разработке.");
+    }
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Извлечь всё"
+ */
+void MainWindow::onExtractAllClicked()
+{
+    int rowCount = ui->partitionsTable->rowCount();
+    if (rowCount == 0) {
+        showError("Нет разделов для извлечения.");
+        return;
+    }
+
+    logMessage(QString("Запрошено извлечение всех %1 разделов").arg(rowCount));
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Подтверждение",
+                                                              QString("Вы действительно хотите извлечь все %1 разделов?\n\nФункция находится в разработке.").arg(rowCount),
+                                                              QMessageBox::Yes | QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        logMessage("Извлечение всех разделов отменено (функция в разработке)");
+        QMessageBox::information(this, "Информация", "Функция извлечения разделов находится в разработке.");
+    }
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Обновить" в файловом менеджере
+ */
+void MainWindow::onRefreshFilesClicked()
+{
+    logMessage("Запрошено обновление списка файлов");
+    QMessageBox::information(this, "Информация", "Функция сканирования файлов находится в разработке.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Извлечь файл"
+ */
+void MainWindow::onExtractFileClicked()
+{
+    logMessage("Запрошено извлечение файлов");
+    QMessageBox::information(this, "Информация", "Функция извлечения файлов находится в разработке.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Поиск файлов"
+ */
+void MainWindow::onFindFilesClicked()
+{
+    logMessage("Запрошен поиск файлов");
+    QMessageBox::information(this, "Информация", "Функция поиска файлов находится в разработке.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Анализировать" суперблока
+ */
+void MainWindow::onAnalyzeSuperClicked()
+{
+    logMessage("Запрошен анализ суперблока");
+    QMessageBox::information(this, "Информация", "Функция анализа суперблока находится в разработке.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Обзор..." в настройках
+ */
+void MainWindow::onBrowseExtractClicked()
+{
+    QString dir = QFileDialog::getExistingDirectory(this,
+                                                    "Выберите папку для извлечения",
+                                                    ui->extractPathEdit->text(),
+                                                    QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+
+    if (!dir.isEmpty()) {
+        ui->extractPathEdit->setText(dir);
+        logMessage(QString("Выбрана папка для извлечения: %1").arg(dir));
+    }
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Сохранить настройки"
+ */
+void MainWindow::onSaveSettingsClicked()
+{
+    saveSettings();
+    logMessage("Настройки сохранены");
+    QMessageBox::information(this, "Успех", "Настройки успешно сохранены.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "По умолчанию"
+ */
+void MainWindow::onDefaultSettingsClicked()
+{
+    // Сброс настроек к значениям по умолчанию
+    QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                          + "/AndroidExtractor";
+    ui->extractPathEdit->setText(defaultPath);
+    ui->saveLogsCheckBox->setChecked(true);
+    ui->detailLevelCombo->setCurrentIndex(1);
+    ui->autoScrollCheckBox->setChecked(true);
+
+    logMessage("Настройки сброшены к значениям по умолчанию");
+    QMessageBox::information(this, "Информация", "Настройки сброшены к значениям по умолчанию.");
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Сохранить отчёт"
+ */
+void MainWindow::onSaveReportClicked()
+{
+    logMessage("Запрошено сохранение отчета");
+    QMessageBox::information(this, "Информация", "Функция сохранения отчета находится в разработке.");
+}
+
+/**
+ * @brief Показать контекстное меню для таблицы разделов
+ * @param pos Позиция курсора в координатах виджета
+ */
+void MainWindow::showPartitionContextMenu(const QPoint& pos)
+{
+    QTableWidgetItem* item = ui->partitionsTable->itemAt(pos);
+    if (item) {
+        m_selectedPartitionRow = item->row();
+        m_contextMenu->exec(ui->partitionsTable->viewport()->mapToGlobal(pos));
+    }
+}
+
+/**
+ * @brief Копировать имя раздела в буфер обмена
+ */
+void MainWindow::copyPartitionName()
+{
+    if (m_selectedPartitionRow >= 0 && m_selectedPartitionRow < ui->partitionsTable->rowCount()) {
+        QTableWidgetItem* item = ui->partitionsTable->item(m_selectedPartitionRow, 0);
+        if (item) {
+            QApplication::clipboard()->setText(item->text());
+            logMessage(QString("Скопировано имя раздела: %1").arg(item->text()));
+            ui->statusbar->showMessage("Имя раздела скопировано в буфер обмена", 2000);
+        }
+    }
+}
+
+/**
+ * @brief Копировать GUID раздела в буфер обмена
+ */
+void MainWindow::copyPartitionGuid()
+{
+    if (m_selectedPartitionRow >= 0 && m_selectedPartitionRow < ui->partitionsTable->rowCount()) {
+        QTableWidgetItem* item = ui->partitionsTable->item(m_selectedPartitionRow, 4);
+        if (item) {
+            QApplication::clipboard()->setText(item->text());
+            logMessage(QString("Скопирован GUID раздела: %1").arg(item->text()));
+            ui->statusbar->showMessage("GUID раздела скопирован в буфер обмена", 2000);
+        }
+    }
+}
+
+/**
+ * @brief Копировать смещение раздела в буфер обмена
+ */
+void MainWindow::copyPartitionOffset()
+{
+    if (m_selectedPartitionRow >= 0 && m_selectedPartitionRow < ui->partitionsTable->rowCount()) {
+        QTableWidgetItem* item = ui->partitionsTable->item(m_selectedPartitionRow, 1);
+        if (item) {
+            QApplication::clipboard()->setText(item->text());
+            logMessage(QString("Скопировано смещение раздела: %1").arg(item->text()));
+            ui->statusbar->showMessage("Смещение раздела скопировано в буфер обмена", 2000);
+        }
+    }
+}
+
+/**
+ * @brief Показать выбранный раздел в Hex Viewer
+ */
+void MainWindow::showInHexViewer()
+{
+    if (m_selectedPartitionRow >= 0 && m_selectedPartitionRow < ui->partitionsTable->rowCount()) {
+        // Получаем информацию о разделе
+        QTableWidgetItem* nameItem = ui->partitionsTable->item(m_selectedPartitionRow, 0);
+        QTableWidgetItem* offsetItem = ui->partitionsTable->item(m_selectedPartitionRow, 1);
+        QTableWidgetItem* sizeItem = ui->partitionsTable->item(m_selectedPartitionRow, 2);
+
+        if (nameItem && offsetItem && sizeItem) {
+            QString partitionName = nameItem->text();
+            QString offsetStr = offsetItem->text();
+
+            // Преобразуем смещение из hex строки в число
+            bool ok;
+            qint64 offset = offsetStr.mid(2).toLongLong(&ok, 16); // Пропускаем "0x"
+
+            if (ok && m_hexViewer) {
+                // Загружаем данные раздела в Hex Viewer
+                QString filePath = ui->filePathEdit->text();
+                if (!filePath.isEmpty() && QFile::exists(filePath)) {
+                    // Читаем первые 4096 байт раздела для предпросмотра
+                    if (m_hexViewer->loadDataFromFile(filePath, offset, 4096)) {
+                        logMessage(QString("Загружен раздел '%1' в Hex Viewer (первые 4096 байт)").arg(partitionName));
+                        ui->tabWidget->setCurrentIndex(1); // Переключаем на вкладку Hex Viewer
+                    } else {
+                        showError("Не удалось загрузить данные раздела в Hex Viewer");
+                    }
+                } else {
+                    showError("Файл не выбран или не существует");
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief Обработка двойного клика по разделу в таблице
+ * @param item Элемент таблицы, по которому был выполнен двойной клик
+ */
+void MainWindow::onPartitionDoubleClicked(QTableWidgetItem* item)
+{
+    if (item) {
+        int row = item->row();
+        QString partitionName = ui->partitionsTable->item(row, 0)->text();
+        logMessage(QString("Двойной клик по разделу: %1 (строка %2)").arg(partitionName).arg(row));
+
+        // Показываем информацию о разделе в Hex Viewer
+        showInHexViewer();
+    }
+}
+
+/**
+ * @brief Обработка двойного клика по файлу в дереве
+ * @param item Элемент дерева файлов
+ * @param column Номер колонки
+ */
+void MainWindow::onFileDoubleClicked(QTreeWidgetItem* item, int column)
+{
+    Q_UNUSED(column);
+    if (item) {
+        QString fileName = item->text(0);
+        logMessage(QString("Двойной клик по файлу: %1").arg(fileName));
+
+        QMessageBox::information(this, "Информация",
+                                 QString("Двойной клик по файлу '%1'.\nФункция просмотра файлов находится в разработке.").arg(fileName));
+    }
+}
+
+/**
+ * @brief Слот для обработки сообщений лога
+ * @param message Сообщение лога
+ */
+void MainWindow::onLogMessage(const QString &message)
+{
+    // Добавляем сообщение в лог
+    ui->logTextEdit->append(message);
+
+    // Автопрокрутка, если включена
+    if (ui->autoScrollCheckBox->isChecked()) {
+        QTextCursor cursor = ui->logTextEdit->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        ui->logTextEdit->setTextCursor(cursor);
+    }
+
+    // Показываем в statusbar (первые 80 символов)
+    QString shortMessage = message;
+    if (shortMessage.length() > 80) {
+        shortMessage = shortMessage.left(77) + "...";
+    }
+    ui->statusbar->showMessage(shortMessage, 3000);
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Очистить лог"
+ */
+void MainWindow::onClearLogClicked()
+{
+    ui->logTextEdit->clear();
+    QString timestamp = QDateTime::currentDateTime().toString("[HH:mm:ss]");
+    ui->logTextEdit->append(timestamp + " Лог очищен");
+    ui->statusbar->showMessage("Лог очищен", 2000);
+}
+
+/**
+ * @brief Слот для обработки нажатия кнопки "Сохранить лог"
+ */
+void MainWindow::onSaveLogClicked()
 {
     QString fileName = QFileDialog::getSaveFileName(this,
-                                                    "Сохранить логи",
-                                                    QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/android_extractor_logs.txt",
-                                                    "Текстовые файлы (*.txt);;Все файлы (*)");
+                                                    "Сохранить лог",
+                                                    QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
+                                                        "/android_extractor_" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") + ".log",
+                                                    "Лог файлы (*.log *.txt);;Все файлы (*.*)");
 
     if (!fileName.isEmpty()) {
         QFile file(fileName);
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream stream(&file);
-            stream << ui->logsTextEdit->toPlainText();
+            stream << ui->logTextEdit->toPlainText();
             file.close();
-            logMessage(QString("Логи сохранены в: %1").arg(fileName), "success");
-            QMessageBox::information(this, "Успех", "Логи успешно сохранены.");
+            logMessage(QString("Лог сохранен в: %1").arg(fileName));
+            ui->statusbar->showMessage("Лог сохранен", 3000);
         } else {
-            logMessage(QString("Не удалось сохранить логи в: %1").arg(fileName), "error");
-            QMessageBox::warning(this, "Ошибка", "Не удалось сохранить файл.");
+            showError("Не удалось сохранить лог");
         }
     }
 }
 
-// Добавить раздел в дерево
-void MainWindow::addPartitionToTree(const QString& name, const QString& guid,
-                                    quint64 size, const QString& type,
-                                    const QString& path, quint64 offset)
+/**
+ * @brief Слот для обработки нажатия кнопки "Копировать лог"
+ */
+void MainWindow::onCopyLogClicked()
 {
-    QTreeWidgetItem* item = new QTreeWidgetItem(ui->treeWidget);
-
-    // Установка текста в колонках
-    item->setText(0, name);
-    item->setText(1, formatSize(size));
-    item->setText(2, guid);
-    item->setText(3, type);
-
-    // Установка иконки в зависимости от типа раздела
-    if (type.contains("super", Qt::CaseInsensitive) || name.contains("super", Qt::CaseInsensitive)) {
-        item->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-        item->setForeground(0, QBrush(QColor(255, 165, 0))); // Оранжевый для super
-    } else if (type.contains("linux", Qt::CaseInsensitive) || name.contains("system", Qt::CaseInsensitive)) {
-        item->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-    } else if (type.contains("fat", Qt::CaseInsensitive) || name.contains("boot", Qt::CaseInsensitive)) {
-        item->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-    } else if (name.contains("userdata", Qt::CaseInsensitive) || name.contains("data", Qt::CaseInsensitive)) {
-        item->setIcon(0, QIcon::fromTheme("drive-harddisk"));
+    QString logText = ui->logTextEdit->toPlainText();
+    if (!logText.isEmpty()) {
+        QApplication::clipboard()->setText(logText);
+        logMessage("Лог скопирован в буфер обмена");
+        ui->statusbar->showMessage("Лог скопирован в буфер обмена", 2000);
     } else {
-        item->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-    }
-
-    // Сохранение данных раздела
-    QVariantMap partData;
-    partData["type"] = "partition";
-    partData["name"] = name;
-    partData["guid"] = guid;
-    partData["size"] = size;
-    partData["path"] = path;
-    partData["offset"] = offset;
-    partData["partition_type"] = type;
-
-    // Сохранение данных в элементе дерева
-    item->setData(0, Qt::UserRole, partData);
-
-    // Сохранение в карту разделов
-    QString key = QString("%1@%2").arg(name).arg(offset);
-    m_partitionMap[key] = partData;
-}
-
-// Форматирование размера
-QString MainWindow::formatSize(quint64 bytes) const
-{
-    const QStringList units = {"Б", "КБ", "МБ", "ГБ", "ТБ"};
-    double size = bytes;
-    int unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.size() - 1) {
-        size /= 1024;
-        unitIndex++;
-    }
-
-    return QString("%1 %2").arg(size, 0, 'f', 2).arg(units[unitIndex]);
-}
-
-// Анализ файла образа
-void MainWindow::analyzeImageFile(const QString& filePath)
-{
-    // Проверяем, не анализируем ли мы уже этот файл
-    if (m_currentImagePath == filePath && !m_partitionMap.isEmpty()) {
-        qDebug() << "Файл уже анализируется:" << filePath;
-        return;
-    }
-
-    // Очистка предыдущих данных
-    ui->treeWidget->clear();
-    m_partitionMap.clear();
-    m_currentImagePath = filePath;
-    m_currentFolderPath.clear(); // Сбрасываем папку
-
-    updateStatusBar("Анализ образа...");
-    showProgress(true, 0);
-
-    // Обработка событий для обновления UI
-    QApplication::processEvents();
-
-    try {
-        if (m_partitionAnalyzer->analyzePartitions(filePath)) {
-            auto partitions = m_partitionAnalyzer->getPartitions();
-
-            // Добавление файла как корневого элемента
-            QTreeWidgetItem* fileItem = new QTreeWidgetItem(ui->treeWidget);
-            QFileInfo fileInfo(filePath);
-            fileItem->setText(0, fileInfo.fileName());
-            fileItem->setText(1, formatSize(fileInfo.size()));
-            fileItem->setText(2, "");
-            fileItem->setText(3, "Disk Image");
-            fileItem->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-            fileItem->setExpanded(true);
-
-            QVariantMap fileData;
-            fileData["type"] = "disk_image";
-            fileData["path"] = filePath;
-            fileData["size"] = fileInfo.size();
-            fileItem->setData(0, Qt::UserRole, fileData);
-
-            // Добавление разделов как дочерних элементов
-            for (const auto& partition : partitions) {
-                addPartitionToTree(
-                    partition.name,
-                    partition.guid,
-                    partition.size,
-                    partition.type,
-                    filePath,
-                    partition.offset
-                    );
-            }
-
-            // Проверка на наличие super раздела
-            checkAndAddSuperPartition(filePath);
-
-            updateStatusBar(QString("Анализ завершен. Разделов: %1").arg(partitions.size()), 3000);
-
-            // Автоматический анализ super раздела, если найден
-            autoSuperPartitionAnalysis();
-        } else {
-            // Если не удалось распарсить как образ, возможно это просто файл
-            QTreeWidgetItem* fileItem = new QTreeWidgetItem(ui->treeWidget);
-            QFileInfo fileInfo(filePath);
-            fileItem->setText(0, fileInfo.fileName());
-            fileItem->setText(1, formatSize(fileInfo.size()));
-            fileItem->setText(2, "");
-            fileItem->setText(3, "File");
-            fileItem->setIcon(0, QIcon::fromTheme("text-x-generic"));
-
-            QVariantMap fileData;
-            fileData["type"] = "file";
-            fileData["path"] = filePath;
-            fileData["size"] = fileInfo.size();
-            fileItem->setData(0, Qt::UserRole, fileData);
-
-            // Проверяем, не является ли это super разделом
-            if (SuperAnalyzer::isSuperImage(filePath)) {
-                fileItem->setText(3, "SUPER Image");
-                fileItem->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-                fileData["is_super"] = true;
-                fileItem->setData(0, Qt::UserRole, fileData);
-
-                // Предлагаем анализ асинхронно
-                QTimer::singleShot(100, this, [this]() {
-                    int result = QMessageBox::question(this, "SUPER раздел",
-                                                       "Обнаружен SUPER раздел.\nВыполнить анализ?",
-                                                       QMessageBox::Yes | QMessageBox::No,
-                                                       QMessageBox::Yes);
-                    if (result == QMessageBox::Yes) {
-                        on_actionAnalyzeSuper_triggered();
-                    }
-                });
-            }
-
-            updateStatusBar("Файл открыт (не является образом диска)", 3000);
-        }
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, "Критическая ошибка",
-                              QString("Исключение при анализе: %1").arg(e.what()));
-        updateStatusBar("Критическая ошибка при анализе", 3000);
-    } catch (...) {
-        QMessageBox::critical(this, "Критическая ошибка",
-                              "Неизвестное исключение при анализе файла");
-        updateStatusBar("Неизвестная ошибка при анализе", 3000);
-    }
-
-    showProgress(false);
-}
-
-
-// Проверка и добавление super раздела
-void MainWindow::checkAndAddSuperPartition(const QString& filePath)
-{
-    // Поиск super раздела среди обычных разделов
-    auto partitions = m_partitionAnalyzer->getPartitions();
-
-    for (const auto& partition : partitions) {
-        if (partition.name.contains("super", Qt::CaseInsensitive) ||
-            partition.type.contains("super", Qt::CaseInsensitive) ||
-            partition.guid.contains("E6A98E58", Qt::CaseInsensitive)) { // GUID динамического раздела
-
-            // Добавление super раздела в дерево
-            QTreeWidgetItem* superItem = new QTreeWidgetItem(ui->treeWidget);
-            superItem->setText(0, QString("SUPER [%1]").arg(partition.name));
-            superItem->setText(1, formatSize(partition.size));
-            superItem->setText(2, partition.guid);
-            superItem->setText(3, "Dynamic Super Partition");
-            superItem->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-            superItem->setForeground(0, QBrush(QColor(255, 165, 0))); // Оранжевый
-
-            // Сохранение данных super раздела
-            QVariantMap superData;
-            superData["type"] = "super_container";
-            superData["name"] = partition.name;
-            superData["path"] = filePath;
-            superData["offset"] = partition.offset;
-            superData["size"] = partition.size;
-            superData["guid"] = partition.guid;
-            superItem->setData(0, Qt::UserRole, superData);
-
-            break;
-        }
+        showError("Лог пуст");
     }
 }
 
-// Автоматический анализ super раздела
-void MainWindow::autoSuperPartitionAnalysis()
+/**
+ * @brief Слот для обработки изменения состояния чекбокса автопрокрутки
+ * @param state Состояние чекбокса
+ */
+void MainWindow::onAutoScrollChanged(int state)
 {
-    // Поиск super раздела в дереве
-    for (int i = 0; i < ui->treeWidget->topLevelItemCount(); ++i) {
-        QTreeWidgetItem* item = ui->treeWidget->topLevelItem(i);
-        QVariant data = item->data(0, Qt::UserRole);
-
-        if (data.isValid() && data.typeId() == QMetaType::QVariantMap) {
-            QVariantMap map = data.toMap();
-            if (map["type"].toString() == "super_container") {
-                // Найден super раздел, можно предложить анализ
-                int result = QMessageBox::question(this, "Обнаружен SUPER раздел",
-                                                   "Обнаружен динамический раздел SUPER.\n"
-                                                   "Выполнить автоматический анализ?",
-                                                   QMessageBox::Yes | QMessageBox::No,
-                                                   QMessageBox::Yes);
-
-                if (result == QMessageBox::Yes) {
-                    on_actionAnalyzeSuper_triggered();
-                }
-                break;
-            }
-        }
-    }
+    Q_UNUSED(state);
+    logMessage(QString("Автопрокрутка логов %1").arg(ui->autoScrollCheckBox->isChecked() ? "включена" : "выключена"));
 }
 
-// Анализ папки
-void MainWindow::analyzeFolder(const QString& folderPath)
+/**
+ * @brief Показать диалог "О программе"
+ */
+void MainWindow::showAboutDialog()
 {
-    m_currentFolderPath = folderPath;
-    m_currentImagePath.clear(); // Сбрасываем файл
-    ui->treeWidget->clear();
-    m_partitionMap.clear();
+    logMessage("Открыто окно 'О программе'");
 
-    updateStatusBar(QString("Анализ папки: %1").arg(folderPath));
-    showProgress(true, 0);
-
-    QApplication::processEvents();
-
-    try {
-        // Сканируем папку на наличие образов
-        scanFolderForImages(folderPath);
-
-        updateStatusBar(QString("Анализ папки завершен. Файлов найдено: %1")
-                            .arg(ui->treeWidget->topLevelItemCount()), 3000);
-
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, "Ошибка",
-                              QString("Исключение при анализе папки: %1").arg(e.what()));
-        updateStatusBar("Критическая ошибка при анализе папки", 3000);
-    } catch (...) {
-        QMessageBox::critical(this, "Ошибка",
-                              "Неизвестное исключение при анализе папки");
-        updateStatusBar("Неизвестная ошибка при анализе папки", 3000);
-    }
-
-    showProgress(false);
-}
-
-// Сканирование папки на наличие образов
-void MainWindow::scanFolderForImages(const QString& folderPath)
-{
-    QDir dir(folderPath);
-
-    // Устанавливаем фильтры для поиска образов
-    QStringList filters;
-    filters << "*.img" << "*.bin" << "*.raw" << "*.super"
-            << "*.sparseimg" << "*.mbn" << "*.sin" << "*.dmp";
-
-    dir.setNameFilters(filters);
-    dir.setFilter(QDir::Files | QDir::NoSymLinks | QDir::Readable);
-
-    QFileInfoList fileList = dir.entryInfoList();
-
-    // Добавляем саму папку как корневой элемент
-    QTreeWidgetItem* folderItem = new QTreeWidgetItem(ui->treeWidget);
-    folderItem->setText(0, QFileInfo(folderPath).fileName());
-    folderItem->setText(1, "Папка");
-    folderItem->setText(2, "");
-    folderItem->setText(3, "Directory");
-    folderItem->setIcon(0, QIcon::fromTheme("folder"));
-    folderItem->setExpanded(true);
-
-    // Сохраняем данные папки
-    QVariantMap folderData;
-    folderData["type"] = "folder";
-    folderData["path"] = folderPath;
-    folderItem->setData(0, Qt::UserRole, folderData);
-
-    // Анализируем каждый файл
-    for (const QFileInfo& fileInfo : fileList) {
-        QString filePath = fileInfo.absoluteFilePath();
-
-        // Проверяем, является ли файл образом диска или super разделом
-        bool isDiskImage = PartitionAnalyzer::isDiskImage(filePath);
-        bool isSuperImage = SuperAnalyzer::isSuperImage(filePath);
-
-        if (isDiskImage || isSuperImage) {
-            QTreeWidgetItem* fileItem = new QTreeWidgetItem(folderItem);
-            fileItem->setText(0, fileInfo.fileName());
-            fileItem->setText(1, formatSize(fileInfo.size()));
-            fileItem->setText(2, "");
-            fileItem->setText(3, isSuperImage ? "SUPER Image" : "Disk Image");
-            fileItem->setIcon(0, QIcon::fromTheme("drive-harddisk"));
-
-            // Сохраняем данные файла
-            QVariantMap fileData;
-            fileData["type"] = "file";
-            fileData["path"] = filePath;
-            fileData["is_super"] = isSuperImage;
-            fileData["is_disk_image"] = isDiskImage;
-            fileData["size"] = fileInfo.size();
-            fileItem->setData(0, Qt::UserRole, fileData);
-        }
-    }
-
-    // Если файлов не найдено, добавляем сообщение
-    if (folderItem->childCount() == 0) {
-        QTreeWidgetItem* noFilesItem = new QTreeWidgetItem(folderItem);
-        noFilesItem->setText(0, "Образы не найдены");
-        noFilesItem->setText(1, "");
-        noFilesItem->setText(2, "");
-        noFilesItem->setText(3, "No images found");
-        noFilesItem->setIcon(0, QIcon::fromTheme("dialog-warning"));
-        noFilesItem->setForeground(0, QBrush(Qt::gray));
-    }
-}
-
-// Показать информацию о разделе
-void MainWindow::showPartitionInfo(const QVariantMap& partData)
-{
-    QString info = QString("Информация о разделе:\n\n"
-                           "Имя: %1\n"
-                           "Тип: %2\n"
-                           "GUID: %3\n"
-                           "Размер: %4\n"
-                           "Смещение: 0x%5\n"
-                           "Путь: %6")
-                       .arg(partData["name"].toString())
-                       .arg(partData.value("partition_type", "N/A").toString())
-                       .arg(partData["guid"].toString())
-                       .arg(formatSize(partData["size"].toULongLong()))
-                       .arg(partData["offset"].toULongLong(), 0, 16)
-                       .arg(partData["path"].toString());
-
-    QMessageBox::information(this, "Информация о разделе", info);
-}
-
-// ==================== СЛОТЫ ДЛЯ МЕНЮ ====================
-
-// Открытие образа диска
-void MainWindow::on_actionOpenImage_triggered()
-{
-    QString filePath = QFileDialog::getOpenFileName(this,
-                                                    "Открыть образ диска",
-                                                    QStandardPaths::writableLocation(QStandardPaths::HomeLocation),
-                                                    "Образы дисков (*.img *.bin *.raw *.super *.sparseimg);;"
-                                                    "Все файлы (*)");
-
-    if (!filePath.isEmpty()) {
-        analyzeImageFile(filePath);
-    }
-}
-
-// Открытие папки для анализа
-void MainWindow::on_actionOpenFolder_triggered()
-{
-    QString folderPath = QFileDialog::getExistingDirectory(this,
-                                                           "Открыть папку для анализа",
-                                                           QStandardPaths::writableLocation(QStandardPaths::HomeLocation),
-                                                           QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
-
-    if (!folderPath.isEmpty()) {
-        analyzeFolder(folderPath);
-    }
-}
-
-// Анализ SUPER раздела
-void MainWindow::on_actionAnalyzeSuper_triggered()
-{
-    if (m_currentImagePath.isEmpty() && m_currentFolderPath.isEmpty()) {
-        QMessageBox::information(this, "Информация",
-                                 "Сначала откройте образ или папку.");
-        return;
-    }
-
-    updateStatusBar("Анализ SUPER раздела...");
-    showProgress(true, 0);
-
-    QApplication::processEvents();
-
-    try {
-        // Проверяем, выбран ли конкретный super раздел в дереве
-        QTreeWidgetItem* currentItem = ui->treeWidget->currentItem();
-        QString superPath = m_currentImagePath;
-        quint64 superOffset = 0;
-
-        if (currentItem) {
-            QVariant data = currentItem->data(0, Qt::UserRole);
-            if (data.isValid() && data.typeId() == QMetaType::QVariantMap) {
-                QVariantMap map = data.toMap();
-                if (map["type"].toString() == "super_container") {
-                    superPath = map["path"].toString();
-                    superOffset = map["offset"].toULongLong();
-                    qDebug() << "Анализ конкретного SUPER раздела, offset:" << superOffset;
-                } else if (map["type"].toString() == "file" && map["is_super"].toBool()) {
-                    superPath = map["path"].toString();
-                    qDebug() << "Анализ файла SUPER раздела:" << superPath;
-                }
-            }
-        }
-
-        if (superPath.isEmpty()) {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Не выбран SUPER раздел для анализа.");
-            showProgress(false);
-            return;
-        }
-
-        // Анализ super раздела с учетом смещения
-        bool success = m_superAnalyzer->analyzeSuper(superPath, superOffset);
-
-        if (success) {
-            // Добавляем разделы SUPER в дерево
-            m_superAnalyzer->populateTreeWidget(ui->treeWidget);
-
-            // Показываем GUID в таблице
-            auto partitions = m_superAnalyzer->getPartitions();
-            ui->guidTableWidget->setRowCount(0);
-
-            for (const auto& partition : partitions) {
-                int row = ui->guidTableWidget->rowCount();
-                ui->guidTableWidget->insertRow(row);
-
-                ui->guidTableWidget->setItem(row, 0, new QTableWidgetItem(partition.guid));
-                ui->guidTableWidget->setItem(row, 1, new QTableWidgetItem("Dynamic"));
-                ui->guidTableWidget->setItem(row, 2,
-                                             new QTableWidgetItem(m_guidManager->getGuidDescription(partition.guid)));
-                ui->guidTableWidget->setItem(row, 3, new QTableWidgetItem(partition.name));
-            }
-
-            updateStatusBar(QString("SUPER проанализирован. Разделов: %1").arg(partitions.size()), 3000);
-        } else {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Не удалось проанализировать SUPER раздел.\n"
-                                 "Возможно, он поврежден или имеет неизвестный формат.");
-            updateStatusBar("Ошибка анализа SUPER", 3000);
-        }
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, "Ошибка",
-                              QString("Исключение при анализе SUPER: %1").arg(e.what()));
-        updateStatusBar("Критическая ошибка при анализе SUPER", 3000);
-    } catch (...) {
-        QMessageBox::critical(this, "Ошибка",
-                              "Неизвестное исключение при анализе SUPER");
-        updateStatusBar("Неизвестная ошибка при анализе SUPER", 3000);
-    }
-
-    showProgress(false);
-}
-
-// Извлечение раздела
-void MainWindow::on_actionExtractPartition_triggered()
-{
-    QTreeWidgetItem* currentItem = ui->treeWidget->currentItem();
-    if (!currentItem) {
-        QMessageBox::information(this, "Информация",
-                                 "Выберите раздел для извлечения.");
-        return;
-    }
-
-    // Получение данных раздела
-    QVariant data = currentItem->data(0, Qt::UserRole);
-    if (!data.isValid() || data.typeId() != QMetaType::QVariantMap) {
-        QMessageBox::warning(this, "Ошибка",
-                             "Нет данных о разделе.");
-        return;
-    }
-
-    QVariantMap partData = data.toMap();
-    QString partType = partData["type"].toString();
-
-    // Запрос пути для сохранения
-    QString defaultName = partData["name"].toString().replace("/", "_") + ".img";
-    QString savePath = QFileDialog::getSaveFileName(this,
-                                                    "Сохранить раздел",
-                                                    QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + defaultName,
-                                                    "Образы дисков (*.img *.bin);;Все файлы (*)");
-
-    if (savePath.isEmpty()) {
-        return;
-    }
-
-    updateStatusBar("Извлечение раздела...");
-    showProgress(true, 100);
-
-    QApplication::processEvents();
-
-    try {
-        bool success = false;
-
-        if (partType == "super_partition") {
-            // Извлечение раздела из SUPER
-            success = m_superAnalyzer->extractPartition(
-                partData["name"].toString(),
-                savePath
-                );
-        } else if (partType == "partition") {
-            // Извлечение обычного раздела
-            success = m_fileManager->extractPartition(
-                partData["path"].toString(),
-                partData["offset"].toULongLong(),
-                partData["size"].toULongLong(),
-                savePath
-                );
-        } else {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Неподдерживаемый тип раздела.");
-            showProgress(false);
-            return;
-        }
-
-        if (success) {
-            updateStatusBar(QString("Раздел успешно извлечен в: %1").arg(savePath), 5000);
-            QMessageBox::information(this, "Успех",
-                                     QString("Раздел успешно извлечен в:\n%1")
-                                         .arg(savePath));
-        } else {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Не удалось извлечь раздел.");
-            updateStatusBar("Ошибка извлечения раздела", 3000);
-        }
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, "Критическая ошибка",
-                              QString("Исключение при извлечении: %1").arg(e.what()));
-        updateStatusBar("Критическая ошибка при извлечении", 3000);
-    } catch (...) {
-        QMessageBox::critical(this, "Критическая ошибка",
-                              "Неизвестное исключение при извлечении");
-        updateStatusBar("Неизвестная ошибка при извлечении", 3000);
-    }
-
-    showProgress(false);
-}
-
-// Переключение на темную тему
-void MainWindow::on_actionDarkTheme_triggered()
-{
-    applyDarkTheme();
-    updateStatusBar("Темная тема активирована", 2000);
-}
-
-// Переключение на светлую тему
-void MainWindow::on_actionLightTheme_triggered()
-{
-    applyLightTheme();
-    updateStatusBar("Светлая тема активирована", 2000);
-}
-
-// Выход из приложения
-void MainWindow::on_actionExit_triggered()
-{
-    close();
-}
-
-// О программе
-void MainWindow::on_actionAbout_triggered()
-{
     QMessageBox::about(this, "О программе",
-                       "Android Data Extractor\n"
-                       "Версия: 1.2.0\n\n"
-                       "Инструмент для анализа и извлечения данных\n"
-                       "с Android устройств и образов дисков.\n\n"
-                       "Поддержка:\n"
-                       "- Обычных разделов (MBR/GPT)\n"
-                       "- Динамических разделов SUPER\n"
-                       "- Анализа GUID\n"
-                       "- Работы с папками и файлами\n"
-                       "- Темной и светлой темы\n\n"
-                       "Требования: C++20, Qt6\n"
-                       "Лицензия: MIT");
+                       "<h2>Android Data Extractor v1.0</h2>"
+                       "<p><b>Программа для извлечения и анализа данных с Android устройств и образов.</b></p>"
+                       "<p><b>Основные функции:</b></p>"
+                       "<ul>"
+                       "<li>Анализ таблиц разделов (GPT/MBR)</li>"
+                       "<li>Просмотр содержимого в Hex-формате</li>"
+                       "<li>Извлечение файлов и разделов</li>"
+                       "<li>Анализ файловых систем</li>"
+                       "<li>Подробное логирование работы</li>"
+                       "</ul>"
+                       "<p><b>Версия:</b> 1.0.0</p>"
+                       "<p><b>Сборка:</b> " __DATE__ " " __TIME__ "</p>"
+                       "<p><b>Лицензия:</b> GPL v3</p>"
+                       "<p><b>Поддержка:</b> <a href='https://github.com/RUSIKAVS/AndroidDataExtractor'>GitHub</a></p>"
+                       "<p><b>Автор:</b> Команда разработчиков</p>");
 }
 
-// ==================== СЛОТЫ ДЛЯ ВИДЖЕТОВ ====================
-
-// Двойной клик по элементу дерева
-void MainWindow::on_treeWidget_itemDoubleClicked(QTreeWidgetItem* item, int column)
+/**
+ * @brief Показать документацию
+ */
+void MainWindow::showDocumentation()
 {
-    Q_UNUSED(column);
+    logMessage("Открытие документации");
 
-    if (!item) {
-        return;
-    }
-
-    // Получение данных элемента
-    QVariant data = item->data(0, Qt::UserRole);
-    if (!data.isValid()) {
-        return;
-    }
-
-    if (data.typeId() == QMetaType::QVariantMap) {
-        QVariantMap map = data.toMap();
-        QString type = map["type"].toString();
-
-        qDebug() << "Двойной клик по элементу типа:" << type;
-
-        if (type == "disk_image" || type == "file") {
-            // Открыть файл для анализа
-            QString filePath = map["path"].toString();
-            bool isSuper = map.value("is_super", false).toBool();
-
-            qDebug() << "Файл:" << filePath << "isSuper:" << isSuper;
-
-            if (isSuper) {
-                // Анализ SUPER раздела - запускаем асинхронно
-                m_currentImagePath = filePath;
-                QTimer::singleShot(0, this, [this]() {
-                    on_actionAnalyzeSuper_triggered();
-                });
-            } else {
-                // Анализ как обычного образа - запускаем асинхронно
-                QTimer::singleShot(0, this, [this, filePath]() {
-                    analyzeImageFile(filePath);
-                });
-            }
-        }
-        else if (type == "folder") {
-            // Открыть папку - запускаем асинхронно
-            QString folderPath = map["path"].toString();
-            QTimer::singleShot(0, this, [this, folderPath]() {
-                analyzeFolder(folderPath);
-            });
-        }
-        else if (type == "super_container") {
-            // Анализ SUPER раздела - запускаем асинхронно
-            int result = QMessageBox::question(this, "Анализ SUPER",
-                                               "Выполнить анализ этого SUPER раздела?",
-                                               QMessageBox::Yes | QMessageBox::No,
-                                               QMessageBox::Yes);
-            if (result == QMessageBox::Yes) {
-                QTimer::singleShot(0, this, [this]() {
-                    on_actionAnalyzeSuper_triggered();
-                });
-            }
-        }
-        else if (type == "super_partition") {
-            // Показать информацию о разделе из SUPER
-            QString guid = map["guid"].toString();
-            QString name = map["name"].toString();
-
-            ui->guidTableWidget->setRowCount(0);
-            int row = ui->guidTableWidget->rowCount();
-            ui->guidTableWidget->insertRow(row);
-
-            ui->guidTableWidget->setItem(row, 0, new QTableWidgetItem(guid));
-            ui->guidTableWidget->setItem(row, 1, new QTableWidgetItem("Dynamic"));
-            ui->guidTableWidget->setItem(row, 2,
-                                         new QTableWidgetItem(m_guidManager->getGuidDescription(guid)));
-            ui->guidTableWidget->setItem(row, 3, new QTableWidgetItem(name));
-
-            // Выделение вкладки с GUID
-            ui->tabWidget->setCurrentIndex(1);
-
-            updateStatusBar(QString("Информация о разделе: %1").arg(name), 2000);
-        }
-        else if (type == "partition") {
-            // Показать информацию об обычном разделе
-            QString guid = map["guid"].toString();
-            QString name = map["name"].toString();
-
-            ui->guidTableWidget->setRowCount(0);
-            int row = ui->guidTableWidget->rowCount();
-            ui->guidTableWidget->insertRow(row);
-
-            ui->guidTableWidget->setItem(row, 0, new QTableWidgetItem(guid));
-            ui->guidTableWidget->setItem(row, 1, new QTableWidgetItem("Partition"));
-            ui->guidTableWidget->setItem(row, 2,
-                                         new QTableWidgetItem(m_guidManager->getGuidDescription(guid)));
-            ui->guidTableWidget->setItem(row, 3, new QTableWidgetItem(name));
-
-            ui->tabWidget->setCurrentIndex(1); // Перейти на вкладку GUID
-            updateStatusBar(QString("Раздел: %1").arg(name), 2000);
-        }
+    QUrl docUrl("https://github.com/RUSIKAVS/AndroidDataExtractor/wiki");
+    if (!QDesktopServices::openUrl(docUrl)) {
+        showError("Не удалось открыть документацию в браузере.");
     }
 }
 
-
-// Изменение текущего элемента дерева
-void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem* current, QTreeWidgetItem* previous)
+/**
+ * @brief Показать сообщение об ошибке
+ * @param message Текст сообщения об ошибке
+ */
+void MainWindow::showError(const QString& message)
 {
-    Q_UNUSED(previous);
-
-    if (!current) {
-        return;
-    }
-
-    // Получение данных текущего элемента
-    QVariant data = current->data(0, Qt::UserRole);
-    if (data.isValid() && data.typeId() == QMetaType::QVariantMap) {
-        QVariantMap map = data.toMap();
-
-        // Обновление информации в статусной строке
-        if (map.contains("name")) {
-            QString type = map["type"].toString();
-            QString name = map["name"].toString();
-            QString info;
-
-            if (type == "super_container") {
-                info = QString("SUPER раздел: %1").arg(name);
-            } else if (type == "super_partition") {
-                info = QString("Динамический раздел: %1").arg(name);
-            } else if (type == "partition") {
-                info = QString("Раздел: %1 (%2)").arg(name).arg(map["partition_type"].toString());
-            } else if (type == "disk_image") {
-                info = QString("Образ диска: %1").arg(name);
-            } else if (type == "file") {
-                info = QString("Файл: %1").arg(name);
-            } else if (type == "folder") {
-                info = QString("Папка: %1").arg(name);
-            }
-
-            updateStatusBar(info, 0);
-        }
-    }
-}
-
-// Контекстное меню для дерева
-void MainWindow::on_treeWidget_customContextMenuRequested(const QPoint& pos)
-{
-    QTreeWidgetItem* item = ui->treeWidget->itemAt(pos);
-    if (!item) {
-        return;
-    }
-
-    // Создание контекстного меню
-    QMenu contextMenu(this);
-
-    // Получение данных элемента
-    QVariant data = item->data(0, Qt::UserRole);
-    if (!data.isValid() || data.typeId() != QMetaType::QVariantMap) {
-        return;
-    }
-
-    QVariantMap map = data.toMap();
-    QString type = map["type"].toString();
-
-    // Добавление действий в меню
-    QAction* extractAction = contextMenu.addAction("Извлечь раздел");
-    extractAction->setIcon(QIcon::fromTheme("document-save-as"));
-
-    if (type == "super_container") {
-        QAction* analyzeAction = contextMenu.addAction("Анализировать SUPER");
-        analyzeAction->setIcon(QIcon::fromTheme("edit-find"));
-
-        contextMenu.addSeparator();
-
-        connect(analyzeAction, &QAction::triggered, this, [this]() {
-            on_actionAnalyzeSuper_triggered();
-        });
-    }
-
-    contextMenu.addSeparator();
-    QAction* infoAction = contextMenu.addAction("Информация");
-    infoAction->setIcon(QIcon::fromTheme("dialog-information"));
-
-    // Подключение слотов
-    connect(extractAction, &QAction::triggered, this, &MainWindow::on_actionExtractPartition_triggered);
-    connect(infoAction, &QAction::triggered, this, [this, map]() {
-        showPartitionInfo(map);
-    });
-
-    // Показ контекстного меню
-    contextMenu.exec(ui->treeWidget->viewport()->mapToGlobal(pos));
-}
-
-// Двойной клик по элементу таблицы GUID
-void MainWindow::on_guidTableWidget_itemDoubleClicked(QTableWidgetItem* item)
-{
-    if (!item) {
-        return;
-    }
-
-    int row = item->row();
-    QString guid = ui->guidTableWidget->item(row, 0)->text();
-
-    // Отображение детальной информации о GUID
-    QString description = m_guidManager->getGuidDescription(guid);
-    QString details = QString("Детальная информация о GUID:\n\n"
-                              "GUID: %1\n"
-                              "Описание: %2\n\n"
-                              "Использование: %3")
-                          .arg(guid)
-                          .arg(description)
-                          .arg(getGuidUsage(guid));
-
-    QMessageBox::information(this, "Информация о GUID", details);
-}
-
-// Получить информацию об использовании GUID
-QString MainWindow::getGuidUsage(const QString& guid) const
-{
-    // База знаний об использовании GUID в Android
-    static const QMap<QString, QString> guidUsage = {
-        {"C12A7328-F81F-11D2-BA4B-00A0C93EC93B", "Системный раздел EFI. Используется для загрузки UEFI систем."},
-        {"19A710A2-B3CA-11E4-B026-10604B889DCF", "Загрузчик Android. Содержит bootloader и recovery."},
-        {"193D1EA4-B3CA-11E4-B075-10604B889DCF", "Раздел boot Android. Ядро и ramdisk."},
-        {"A19EA859-4D6F-7442-8235-686F6C746572", "Системный раздел Android. Содержит ОС и системные приложения."},
-        {"C5A0AEEC-13EA-11E5-A1B1-001E67CA0C3C", "Vendor раздел. Прошивки и драйверы производителя."},
-        {"BD59408B-4514-490D-BF12-9878D963A378", "Пользовательские данные. Приложения, настройки, медиафайлы."},
-        {"E6A98E58-E8E4-4C6E-B078-8B3A7A7B5B9E", "Динамический раздел Android. Контейнер для logical partitions."},
-        {"0FC63DAF-8483-4772-8E79-3D69D8477DE4", "Файловая система Linux. Стандартный тип для ext2/3/4."},
-        {"0657FD6D-A4AB-43C4-84E5-0933C84B4F4F", "Раздел подкачки Linux. Используется для своппинга."}
-    };
-
-    // Поиск точного совпадения
-    auto it = guidUsage.find(guid.toUpper());
-    if (it != guidUsage.end()) {
-        return it.value();
-    }
-
-    // Поиск частичного совпадения
-    for (auto key : guidUsage.keys()) {
-        if (guid.contains(key.left(8), Qt::CaseInsensitive)) {
-            return guidUsage[key];
-        }
-    }
-
-    return "Неизвестное использование. Возможно, пользовательский или системный раздел.";
-}
-
-// Слот для прогресса файловых операций
-void MainWindow::onFileProgressChanged(int current, int total, const QString& message)
-{
-    Q_UNUSED(total);
-    updateProgress(current);
-    updateStatusBar(message, 0);
+    logMessage("ОШИБКА: " + message);
+    QMessageBox::critical(this, "Ошибка", message);
+    ui->statusbar->showMessage("Ошибка: " + message, 5000);
 }
 

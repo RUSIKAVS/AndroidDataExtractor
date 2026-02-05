@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1200</width>
-    <height>800</height>
+    <height>850</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,63 +20,102 @@
       <property name="currentIndex">
        <number>0</number>
       </property>
+
+      <!-- Вкладка 1: Извлечение данных -->
       <widget class="QWidget" name="tab">
        <attribute name="title">
-        <string>Разделы</string>
+        <string>Извлечение данных</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
-         <widget class="QTreeWidget" name="treeWidget"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="tab_2">
-       <attribute name="title">
-        <string>GUID</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_3">
-        <item>
-         <widget class="QTableWidget" name="guidTableWidget"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="tab_3">
-       <attribute name="title">
-        <string>Hex Viewer</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_4">
-        <item>
-         <widget class="QPlainTextEdit" name="hexViewer"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="tab_4">
-       <attribute name="title">
-        <string>Логи</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_5">
-        <item>
-         <widget class="QPlainTextEdit" name="logsTextEdit"/>
-        </item>
-        <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
-           <widget class="QPushButton" name="clearLogsButton">
+           <widget class="QLabel" name="label">
             <property name="text">
-             <string>Очистить логи</string>
+             <string>Выберите образ или устройство:</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="saveLogsButton">
-            <property name="text">
-             <string>Сохранить логи</string>
+           <widget class="QLineEdit" name="filePathEdit">
+            <property name="placeholderText">
+             <string>Путь к файлу или устройству...</string>
             </property>
            </widget>
           </item>
           <item>
-           <!-- ЗДЕСЬ ИСПРАВЛЕНИЕ: spacer заменен на QSpacerItem -->
-           <widget class="QSpacerItem" name="horizontalSpacer">
+           <widget class="QPushButton" name="browseButton">
+            <property name="text">
+             <string>Обзор...</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="scanButton">
+            <property name="text">
+             <string>Сканировать</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QProgressBar" name="progressBar">
+          <property name="value">
+           <number>0</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="partitionsTable">
+          <property name="columnCount">
+           <number>7</number>
+          </property>
+          <property name="rowCount">
+           <number>0</number>
+          </property>
+          <attribute name="horizontalHeaderVisible">
+           <bool>true</bool>
+          </attribute>
+          <attribute name="horizontalHeaderStretchLastSection">
+           <bool>false</bool>
+          </attribute>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <attribute name="verticalHeaderVisible">
+           <bool>false</bool>
+          </attribute>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <item>
+           <widget class="QPushButton" name="extractButton">
+            <property name="text">
+             <string>Извлечь выбранное</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="extractAllButton">
+            <property name="text">
+             <string>Извлечь всё</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
@@ -85,6 +124,297 @@
               <width>40</width>
               <height>20</height>
              </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveReportButton">
+            <property name="text">
+             <string>Сохранить отчёт</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+
+      <!-- Вкладка 2: Hex просмотр -->
+      <widget class="QWidget" name="tab_2">
+       <attribute name="title">
+        <string>Hex просмотр</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QScrollArea" name="scrollArea">
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="scrollAreaWidgetContents">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>1166</width>
+             <height>605</height>
+            </rect>
+           </property>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+
+      <!-- Вкладка 3: Анализ файлов -->
+      <widget class="QWidget" name="tab_3">
+       <attribute name="title">
+        <string>Анализ файлов</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <item>
+         <widget class="QTreeWidget" name="fileTreeWidget">
+          <property name="columnCount">
+           <number>3</number>
+          </property>
+          <property name="headerLabels">
+           <stringlist>
+            <string>Имя файла</string>
+            <string>Размер</string>
+            <string>Тип</string>
+           </stringlist>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <item>
+           <widget class="QPushButton" name="refreshFilesButton">
+            <property name="text">
+             <string>Обновить</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="extractFileButton">
+            <property name="text">
+             <string>Извлечь файл</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="findFilesButton">
+            <property name="text">
+             <string>Поиск файлов</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+
+      <!-- Вкладка 4: Супер блок -->
+      <widget class="QWidget" name="tab_4">
+       <attribute name="title">
+        <string>Супер блок</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_5">
+        <item>
+         <widget class="QTextEdit" name="superBlockText">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <item>
+           <widget class="QPushButton" name="analyzeSuperButton">
+            <property name="text">
+             <string>Анализировать</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_3">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+
+      <!-- Вкладка 5: Настройки -->
+      <widget class="QWidget" name="tab_5">
+       <attribute name="title">
+        <string>Настройки</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_6">
+        <item>
+         <widget class="QGroupBox" name="groupBox">
+          <property name="title">
+           <string>Параметры извлечения</string>
+          </property>
+          <layout class="QFormLayout" name="formLayout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_2">
+             <property name="text">
+              <string>Папка для извлечения:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <layout class="QHBoxLayout" name="horizontalLayout_5">
+             <item>
+              <widget class="QLineEdit" name="extractPathEdit">
+               <property name="placeholderText">
+                <string>Выберите папку...</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="browseExtractButton">
+               <property name="text">
+                <string>Обзор...</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>Сохранять логи:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QCheckBox" name="saveLogsCheckBox">
+             <property name="text">
+              <string>Включить ведение логов</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_4">
+             <property name="text">
+              <string>Уровень детализации:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QComboBox" name="detailLevelCombo">
+             <property name="currentIndex">
+              <number>1</number>
+             </property>
+             <item>
+              <property name="text">
+               <string>Минимальный</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Стандартный</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Подробный</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_6">
+          <item>
+           <widget class="QPushButton" name="saveSettingsButton">
+            <property name="text">
+             <string>Сохранить настройки</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="defaultSettingsButton">
+            <property name="text">
+             <string>По умолчанию</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+
+      <!-- Вкладка 6: Логи -->
+      <widget class="QWidget" name="tab_6">
+       <attribute name="title">
+        <string>Логи</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_7">
+        <item>
+         <widget class="QTextEdit" name="logTextEdit">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="font">
+           <font>
+            <family>Monospace</family>
+            <pointsize>9</pointsize>
+           </font>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_7">
+          <item>
+           <widget class="QPushButton" name="clearLogButton">
+            <property name="text">
+             <string>Очистить лог</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveLogButton">
+            <property name="text">
+             <string>Сохранить лог</string>
             </property>
            </widget>
           </item>
@@ -98,127 +428,115 @@
             </property>
            </widget>
           </item>
+          <item>
+           <spacer name="horizontalSpacer_4">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="copyLogButton">
+            <property name="text">
+             <string>Копировать лог</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
        </layout>
       </widget>
+
      </widget>
     </item>
    </layout>
   </widget>
+
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
      <width>1200</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuFile">
+   <widget class="QMenu" name="menu">
     <property name="title">
      <string>Файл</string>
     </property>
-    <addaction name="actionOpenImage"/>
-    <addaction name="actionOpenFolder"/>
+    <addaction name="actionOpen"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
-   <widget class="QMenu" name="menuTools">
+   <widget class="QMenu" name="menu_2">
     <property name="title">
      <string>Инструменты</string>
     </property>
-    <addaction name="actionExtractPartition"/>
-    <addaction name="actionAnalyzeSuper"/>
+    <addaction name="actionAnalyzePartitions"/>
+    <addaction name="actionHexView"/>
+    <addaction name="actionScanFiles"/>
+    <addaction name="actionViewLogs"/>
    </widget>
-   <widget class="QMenu" name="menuView">
-    <property name="title">
-     <string>Вид</string>
-    </property>
-    <addaction name="actionDarkTheme"/>
-    <addaction name="actionLightTheme"/>
-   </widget>
-   <widget class="QMenu" name="menuHelp">
+   <widget class="QMenu" name="menu_3">
     <property name="title">
      <string>Справка</string>
     </property>
     <addaction name="actionAbout"/>
+    <addaction name="actionDocumentation"/>
    </widget>
-   <addaction name="menuFile"/>
-   <addaction name="menuTools"/>
-   <addaction name="menuView"/>
-   <addaction name="menuHelp"/>
+   <addaction name="menu"/>
+   <addaction name="menu_2"/>
+   <addaction name="menu_3"/>
   </widget>
+
   <widget class="QStatusBar" name="statusbar"/>
-  <widget class="QToolBar" name="mainToolBar">
-   <attribute name="toolBarArea">
-    <enum>TopToolBarArea</enum>
-   </attribute>
-   <attribute name="toolBarBreak">
-    <bool>false</bool>
-   </attribute>
-   <addaction name="actionOpenImage"/>
-   <addaction name="actionOpenFolder"/>
-   <addaction name="separator"/>
-   <addaction name="actionExtractPartition"/>
-   <addaction name="actionAnalyzeSuper"/>
-  </widget>
-  <action name="actionOpenImage">
+
+  <!-- Actions -->
+  <action name="actionOpen">
    <property name="text">
-    <string>Открыть образ...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+O</string>
-   </property>
-  </action>
-  <action name="actionOpenFolder">
-   <property name="text">
-    <string>Открыть папку...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+O</string>
+    <string>Открыть...</string>
    </property>
   </action>
   <action name="actionExit">
    <property name="text">
     <string>Выход</string>
    </property>
-   <property name="shortcut">
-    <string>Ctrl+Q</string>
+  </action>
+  <action name="actionAnalyzePartitions">
+   <property name="text">
+    <string>Анализ разделов</string>
    </property>
   </action>
-  <action name="actionExtractPartition">
+  <action name="actionHexView">
    <property name="text">
-    <string>Извлечь раздел...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+E</string>
+    <string>Hex просмотр</string>
    </property>
   </action>
-  <action name="actionAnalyzeSuper">
+  <action name="actionScanFiles">
    <property name="text">
-    <string>Анализ SUPER...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+S</string>
-   </property>
-  </action>
-  <action name="actionDarkTheme">
-   <property name="text">
-    <string>Темная тема</string>
-   </property>
-  </action>
-  <action name="actionLightTheme">
-   <property name="text">
-    <string>Светлая тема</string>
+    <string>Сканирование файлов</string>
    </property>
   </action>
   <action name="actionAbout">
    <property name="text">
     <string>О программе</string>
    </property>
-   <property name="shortcut">
-    <string>F1</string>
+  </action>
+  <action name="actionDocumentation">
+   <property name="text">
+    <string>Документация</string>
+   </property>
+  </action>
+  <action name="actionViewLogs">
+   <property name="text">
+    <string>Просмотр логов</string>
    </property>
   </action>
  </widget>

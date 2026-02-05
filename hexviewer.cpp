@@ -1,114 +1,255 @@
 #include "hexviewer.h"
-#include <QFont>
-#include <QFontDatabase>
+#include <QScrollBar>
 #include <QTextCursor>
-#include <QTextBlockFormat>
 #include <QTextCharFormat>
+#include <QPalette>
+#include <QApplication>
+#include <QThread>
+#include <QVBoxLayout>      // Добавьте эту строку
+#include <QHBoxLayout>      // Добавьте эту строку (если нужно)
+#include <QLabel>           // Добавьте эту строку (если нужно)
 
+
+/**
+ * @brief Конструктор Hex Viewer
+ * @param parent Родительский виджет
+ */
 HexViewer::HexViewer(QWidget *parent)
-    : QTextEdit(parent)
+    : QWidget(parent)
+    , m_bytesPerLine(16)
+    , m_showAddress(true)
+    , m_showAscii(true)
 {
-    // Устанавливаем моноширинный шрифт для правильного отображения HEX
-    QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    font.setPointSize(10);
-    setFont(font);
-
-    // Делаем виджет только для чтения
-    setReadOnly(true);
-
-    // Настраиваем отступы
-    document()->setDocumentMargin(10);
-
-    // Очищаем начальное содержимое
-    clear();
+    setupUi();
+    qDebug() << "HexViewer: Конструктор вызван";
 }
 
-void HexViewer::setData(const QByteArray &data)
+/**
+ * @brief Инициализирует пользовательский интерфейс
+ */
+void HexViewer::setupUi()
 {
-    clear();
+    // Создаем вертикальный layout
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-    if (data.isEmpty()) {
-        append("No data to display");
+    // Создаем текстовый редактор
+    m_textEdit = new QTextEdit(this);
+    m_textEdit->setReadOnly(true);
+    m_textEdit->setLineWrapMode(QTextEdit::NoWrap);
+    m_textEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_textEdit->setAcceptRichText(false);
+
+    // Настраиваем шрифт (моноширинный для правильного выравнивания)
+    m_font = QFont("Courier New", 10);
+    m_font.setStyleHint(QFont::TypeWriter);
+    m_textEdit->setFont(m_font);
+
+    // Настраиваем цвета
+    QPalette palette = m_textEdit->palette();
+    palette.setColor(QPalette::Base, QColor(240, 240, 240));
+    palette.setColor(QPalette::Text, Qt::black);
+    m_textEdit->setPalette(palette);
+
+    layout->addWidget(m_textEdit);
+
+    // Устанавливаем layout
+    setLayout(layout);
+
+    qDebug() << "HexViewer: UI инициализирован";
+}
+
+/**
+ * @brief Загружает данные из файла для отображения
+ * @param filePath Путь к файлу
+ * @param offset Смещение в файле (в байтах)
+ * @param size Количество байт для чтения (0 = все)
+ * @return true если данные успешно загружены
+ */
+bool HexViewer::loadDataFromFile(const QString &filePath, qint64 offset, qint64 size)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "HexViewer: Не удалось открыть файл" << filePath;
+        return false;
+    }
+
+    if (!file.seek(offset)) {
+        qDebug() << "HexViewer: Не удалось переместиться к смещению" << offset;
+        file.close();
+        return false;
+    }
+
+    qint64 fileSize = file.size();
+    qint64 bytesToRead = size > 0 ? qMin(size, fileSize - offset) : fileSize - offset;
+
+    if (bytesToRead <= 0) {
+        qDebug() << "HexViewer: Нет данных для чтения";
+        file.close();
+        return false;
+    }
+
+    // Читаем данные
+    m_data = file.read(bytesToRead);
+    file.close();
+
+    if (m_data.isEmpty()) {
+        qDebug() << "HexViewer: Не удалось прочитать данные из файла";
+        return false;
+    }
+
+    qDebug() << "HexViewer: Загружено" << m_data.size() << "байт из файла" << filePath;
+
+    // Обновляем отображение
+    updateDisplay();
+
+    return true;
+}
+
+/**
+ * @brief Загружает данные из памяти для отображения
+ * @param data Данные для отображения
+ */
+void HexViewer::loadDataFromMemory(const QByteArray &data)
+{
+    m_data = data;
+    qDebug() << "HexViewer: Загружено" << m_data.size() << "байт из памяти";
+    updateDisplay();
+}
+
+/**
+ * @brief Очищает отображаемые данные
+ */
+void HexViewer::clear()
+{
+    m_data.clear();
+    m_textEdit->clear();
+    qDebug() << "HexViewer: Данные очищены";
+}
+
+/**
+ * @brief Устанавливает количество байт в строке
+ * @param bytesPerLine Количество байт (16 по умолчанию)
+ */
+void HexViewer::setBytesPerLine(int bytesPerLine)
+{
+    if (bytesPerLine > 0 && bytesPerLine <= 64) {
+        m_bytesPerLine = bytesPerLine;
+        updateDisplay();
+        qDebug() << "HexViewer: Установлено" << bytesPerLine << "байт в строке";
+    }
+}
+
+/**
+ * @brief Возвращает текущее количество байт в строке
+ * @return Количество байт в строке
+ */
+int HexViewer::bytesPerLine() const
+{
+    return m_bytesPerLine;
+}
+
+/**
+ * @brief Включает/отключает отображение адресов
+ * @param enabled true для включения адресов
+ */
+void HexViewer::setAddressEnabled(bool enabled)
+{
+    m_showAddress = enabled;
+    updateDisplay();
+    qDebug() << "HexViewer: Отображение адресов" << (enabled ? "включено" : "выключено");
+}
+
+/**
+ * @brief Включает/отключает отображение ASCII
+ * @param enabled true для включения ASCII
+ */
+void HexViewer::setAsciiEnabled(bool enabled)
+{
+    m_showAscii = enabled;
+    updateDisplay();
+    qDebug() << "HexViewer: Отображение ASCII" << (enabled ? "включено" : "выключено");
+}
+
+/**
+ * @brief Обновляет отображение данных
+ */
+void HexViewer::updateDisplay()
+{
+    if (m_data.isEmpty()) {
+        m_textEdit->setPlainText("Нет данных для отображения");
         return;
     }
 
-    // Создаем формат для обычного текста
-    QTextCharFormat normalFormat;
-    normalFormat.setForeground(Qt::black);
+    QString hexDisplay;
+    QTextStream stream(&hexDisplay);
 
-    // Создаем формат для HEX значений
-    QTextCharFormat hexFormat;
-    hexFormat.setForeground(Qt::darkBlue);
-    hexFormat.setFontWeight(QFont::Bold);
-
-    // Создаем формат для ASCII значений
-    QTextCharFormat asciiFormat;
-    asciiFormat.setForeground(Qt::darkGreen);
-
-    // Создаем формат для адресов
-    QTextCharFormat addressFormat;
-    addressFormat.setForeground(Qt::darkGray);
-
-    QTextCursor cursor(document());
-    QTextBlockFormat blockFormat;
-
-    // Отображаем данные построчно по 16 байт в строке
-    for (int i = 0; i < data.size(); i += 16) {
-        QString line;
-
+    // Форматируем данные
+    for (int i = 0; i < m_data.size(); i += m_bytesPerLine) {
         // Адрес
-        cursor.insertText(QString("%1: ").arg(i, 8, 16, QChar('0')), addressFormat);
+        if (m_showAddress) {
+            stream << QString("%1: ").arg(i, 8, 16, QChar('0')).toUpper();
+        }
 
-        // HEX значения
-        for (int j = 0; j < 16; j++) {
-            if (i + j < data.size()) {
-                uint8_t byte = static_cast<uint8_t>(data[i + j]);
-                cursor.insertText(byteToHex(byte) + " ", hexFormat);
+        // Hex байты
+        for (int j = 0; j < m_bytesPerLine; ++j) {
+            if (i + j < m_data.size()) {
+                quint8 byte = static_cast<quint8>(m_data[i + j]);
+                stream << formatByte(byte) << " ";
             } else {
-                cursor.insertText("   ", normalFormat);  // Заполнитель
+                stream << "   "; // Заполнитель для неполных строк
             }
 
             // Разделитель после 8 байт
             if (j == 7) {
-                cursor.insertText(" ", normalFormat);
+                stream << " ";
             }
         }
 
-        // ASCII значения
-        cursor.insertText(" | ", normalFormat);
-        for (int j = 0; j < 16; j++) {
-            if (i + j < data.size()) {
-                uint8_t byte = static_cast<uint8_t>(data[i + j]);
-                cursor.insertText(QString(byteToAscii(byte)), asciiFormat);
-            } else {
-                cursor.insertText(" ", normalFormat);
+        // ASCII представление
+        if (m_showAscii) {
+            stream << " |";
+            for (int j = 0; j < m_bytesPerLine && i + j < m_data.size(); ++j) {
+                stream << formatAsciiChar(m_data[i + j]);
             }
+            stream << "|";
         }
 
-        // Переход на новую строку
-        cursor.insertBlock(blockFormat);
+        stream << "\n";
     }
 
-    // Прокручиваем к началу
-    moveCursor(QTextCursor::Start);
+    m_textEdit->setPlainText(hexDisplay);
+
+    // Прокручиваем в начало
+    QTextCursor cursor = m_textEdit->textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    m_textEdit->setTextCursor(cursor);
+
+    qDebug() << "HexViewer: Отображение обновлено, показано" << m_data.size() << "байт";
 }
 
-void HexViewer::clearDisplay()
-{
-    clear();
-    append("Hex viewer ready. Select a partition to view data.");
-}
-
-QString HexViewer::byteToHex(uint8_t byte)
+/**
+ * @brief Форматирует байт в шестнадцатеричную строку
+ * @param byte Байт для форматирования
+ * @return Строка в формате "XX"
+ */
+QString HexViewer::formatByte(quint8 byte) const
 {
     return QString("%1").arg(byte, 2, 16, QChar('0')).toUpper();
 }
 
-QChar HexViewer::byteToAscii(uint8_t byte)
+/**
+ * @brief Форматирует символ для ASCII отображения
+ * @param ch Символ для форматирования
+ * @return Отформатированный символ или точка для непечатаемых символов
+ */
+QChar HexViewer::formatAsciiChar(char ch) const
 {
-    // Отображаем только печатные ASCII символы, остальные как точки
-    if (byte >= 32 && byte <= 126) {
-        return QChar(byte);
+    uchar uch = static_cast<uchar>(ch);
+    if (uch >= 32 && uch <= 126) {
+        return QChar(ch);
     } else {
         return '.';
     }
