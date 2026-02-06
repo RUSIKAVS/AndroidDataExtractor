@@ -20,8 +20,6 @@
       <property name="currentIndex">
        <number>0</number>
       </property>
-
-      <!-- Вкладка 1: Извлечение данных -->
       <widget class="QWidget" name="tab">
        <attribute name="title">
         <string>Извлечение данных</string>
@@ -68,11 +66,11 @@
         </item>
         <item>
          <widget class="QTableWidget" name="partitionsTable">
-          <property name="columnCount">
-           <number>7</number>
-          </property>
           <property name="rowCount">
            <number>0</number>
+          </property>
+          <property name="columnCount">
+           <number>7</number>
           </property>
           <attribute name="horizontalHeaderVisible">
            <bool>true</bool>
@@ -80,44 +78,44 @@
           <attribute name="horizontalHeaderStretchLastSection">
            <bool>false</bool>
           </attribute>
-          <column/>
-          <column/>
-          <column/>
-          <column/>
-          <column/>
-          <column/>
-          <column/>
           <attribute name="verticalHeaderVisible">
            <bool>false</bool>
           </attribute>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
          </widget>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
            <widget class="QPushButton" name="extractButton">
-            <property name="text">
-             <string>Извлечь выбранное</string>
-            </property>
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Извлечь выбранное</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="extractAllButton">
-            <property name="text">
-             <string>Извлечь всё</string>
-            </property>
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Извлечь всё</string>
             </property>
            </widget>
           </item>
           <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -138,8 +136,6 @@
         </item>
        </layout>
       </widget>
-
-      <!-- Вкладка 2: Hex просмотр -->
       <widget class="QWidget" name="tab_2">
        <attribute name="title">
         <string>Hex просмотр</string>
@@ -155,8 +151,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>1166</width>
-             <height>605</height>
+             <width>1128</width>
+             <height>712</height>
             </rect>
            </property>
           </widget>
@@ -164,8 +160,6 @@
         </item>
        </layout>
       </widget>
-
-      <!-- Вкладка 3: Анализ файлов -->
       <widget class="QWidget" name="tab_3">
        <attribute name="title">
         <string>Анализ файлов</string>
@@ -176,13 +170,28 @@
           <property name="columnCount">
            <number>3</number>
           </property>
-          <property name="headerLabels">
+          <property name="headerLabels" stdset="0">
            <stringlist>
             <string>Имя файла</string>
             <string>Размер</string>
             <string>Тип</string>
            </stringlist>
           </property>
+          <column>
+           <property name="text">
+            <string notr="true">1</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string notr="true">2</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string notr="true">3</string>
+           </property>
+          </column>
          </widget>
         </item>
         <item>
@@ -204,7 +213,7 @@
           <item>
            <spacer name="horizontalSpacer_2">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -225,8 +234,6 @@
         </item>
        </layout>
       </widget>
-
-      <!-- Вкладка 4: Супер блок -->
       <widget class="QWidget" name="tab_4">
        <attribute name="title">
         <string>Супер блок</string>
@@ -251,7 +258,7 @@
           <item>
            <spacer name="horizontalSpacer_3">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -265,8 +272,6 @@
         </item>
        </layout>
       </widget>
-
-      <!-- Вкладка 5: Настройки -->
       <widget class="QWidget" name="tab_5">
        <attribute name="title">
         <string>Настройки</string>
@@ -352,7 +357,7 @@
         <item>
          <spacer name="verticalSpacer">
           <property name="orientation">
-           <enum>Qt::Vertical</enum>
+           <enum>Qt::Orientation::Vertical</enum>
           </property>
           <property name="sizeHint" stdset="0">
            <size>
@@ -382,8 +387,6 @@
         </item>
        </layout>
       </widget>
-
-      <!-- Вкладка 6: Логи -->
       <widget class="QWidget" name="tab_6">
        <attribute name="title">
         <string>Логи</string>
@@ -391,14 +394,14 @@
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <item>
          <widget class="QTextEdit" name="logTextEdit">
-          <property name="readOnly">
-           <bool>true</bool>
-          </property>
           <property name="font">
            <font>
             <family>Monospace</family>
             <pointsize>9</pointsize>
            </font>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
           </property>
          </widget>
         </item>
@@ -431,7 +434,7 @@
           <item>
            <spacer name="horizontalSpacer_4">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -452,19 +455,17 @@
         </item>
        </layout>
       </widget>
-
      </widget>
     </item>
    </layout>
   </widget>
-
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
      <width>1200</width>
-     <height>22</height>
+     <height>30</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu">
@@ -488,17 +489,12 @@
     <property name="title">
      <string>Справка</string>
     </property>
-    <addaction name="actionAbout"/>
-    <addaction name="actionDocumentation"/>
    </widget>
    <addaction name="menu"/>
    <addaction name="menu_2"/>
    <addaction name="menu_3"/>
   </widget>
-
   <widget class="QStatusBar" name="statusbar"/>
-
-  <!-- Actions -->
   <action name="actionOpen">
    <property name="text">
     <string>Открыть...</string>

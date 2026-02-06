@@ -138,10 +138,6 @@ void MainWindow::setupPartitionsTable()
 }
 
 
-
-
-
-
 /**
  * @brief Деструктор главного окна
  */
@@ -334,10 +330,6 @@ void MainWindow::setupConnections()
             this, &MainWindow::onRefreshFilesClicked);
 
     // ========== Меню Справка ==========
-    connect(ui->actionAbout, &QAction::triggered,
-            this, &MainWindow::showAboutDialog);
-    connect(ui->actionDocumentation, &QAction::triggered,
-            this, &MainWindow::showDocumentation);
     connect(ui->actionViewLogs, &QAction::triggered, this, [this]() {
         ui->tabWidget->setCurrentIndex(5); // Переключаем на вкладку логов
         logMessage("Переключено на вкладку логов");
@@ -988,44 +980,6 @@ void MainWindow::onAutoScrollChanged(int state)
 {
     Q_UNUSED(state);
     logMessage(QString("Автопрокрутка логов %1").arg(ui->autoScrollCheckBox->isChecked() ? "включена" : "выключена"));
-}
-
-/**
- * @brief Показать диалог "О программе"
- */
-void MainWindow::showAboutDialog()
-{
-    logMessage("Открыто окно 'О программе'");
-
-    QMessageBox::about(this, "О программе",
-                       "<h2>Android Data Extractor v1.0</h2>"
-                       "<p><b>Программа для извлечения и анализа данных с Android устройств и образов.</b></p>"
-                       "<p><b>Основные функции:</b></p>"
-                       "<ul>"
-                       "<li>Анализ таблиц разделов (GPT/MBR)</li>"
-                       "<li>Просмотр содержимого в Hex-формате</li>"
-                       "<li>Извлечение файлов и разделов</li>"
-                       "<li>Анализ файловых систем</li>"
-                       "<li>Подробное логирование работы</li>"
-                       "</ul>"
-                       "<p><b>Версия:</b> 1.0.0</p>"
-                       "<p><b>Сборка:</b> " __DATE__ " " __TIME__ "</p>"
-                       "<p><b>Лицензия:</b> GPL v3</p>"
-                       "<p><b>Поддержка:</b> <a href='https://github.com/RUSIKAVS/AndroidDataExtractor'>GitHub</a></p>"
-                       "<p><b>Автор:</b> Команда разработчиков</p>");
-}
-
-/**
- * @brief Показать документацию
- */
-void MainWindow::showDocumentation()
-{
-    logMessage("Открытие документации");
-
-    QUrl docUrl("https://github.com/RUSIKAVS/AndroidDataExtractor/wiki");
-    if (!QDesktopServices::openUrl(docUrl)) {
-        showError("Не удалось открыть документацию в браузере.");
-    }
 }
 
 /**

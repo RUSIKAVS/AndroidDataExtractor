@@ -68,8 +68,6 @@ private slots:
     void onAutoScrollChanged(int state);
 
     // ========== Диалоги и сообщения ==========
-    void showAboutDialog();
-    void showDocumentation();
     void showError(const QString& message);
 
 private:
